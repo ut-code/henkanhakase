@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import imageCompression from "browser-image-compression";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 
 const formats = ["PNG", "JPEG", "WebP"];
 
@@ -89,17 +91,24 @@ function App() {
     }
   };
 
-  const saveFile = () => {
+  const saveFile = async () => {
     if (!convertedFile) return;
 
-    const url = URL.createObjectURL(convertedFile);
-    const link = document.createElement("a");
+    try {
+      const filePath = await save({
+        defaultPath: convertedFile.name,
+      });
 
-    link.href = url;
-    link.download = convertedFile.name;
-    link.click();
+      if (!filePath) {
+        return;
+      }
 
-    URL.revokeObjectURL(url);
+      const buffer = await convertedFile.arrayBuffer();
+
+      await writeFile(filePath, new Uint8Array(buffer));
+    } catch (error) {
+      console.error("ファイルの保存に失敗しました:", error);
+    }
   };
 
   const handleFormatChange = (newFormat: string) => {
