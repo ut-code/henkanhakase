@@ -9,14 +9,14 @@ type ImageFormat = (typeof IMAGE_FORMATS)[number];
 type VideoFormat = (typeof VIDEO_FORMATS)[number];
 type Format = ImageFormat | VideoFormat;
 
-const mimeTypes: Record<Format, string> = {
-  PNG: "image/png",
-  JPEG: "image/jpeg",
-  WebP: "image/webp",
-  MP4: "video/mp4",
-  WebM: "video/webm",
-  AVI: "video/x-msvideo",
-  MOV: "video/quicktime",
+const mimeTypes: Record<Format, string[]> = {
+  PNG: ["image/png", "image/x-png"],
+  JPEG: ["image/jpeg", "image/pjpeg", "image/jpg"],
+  WebP: ["image/webp"],
+  MP4: ["video/mp4"],
+  WebM: ["video/webm"],
+  AVI: ["video/x-msvideo", "video/avi", "video/msvideo", "video/vnd.avi"],
+  MOV: ["video/quicktime", "video/mov", "video/x-quicktime"],
 };
 
 function UploadIcon() {
@@ -54,8 +54,8 @@ function App() {
   const sourceFormat = useMemo<Format | null>(
     () =>
       sourceFile
-        ? (Object.keys(mimeTypes).find(
-            (format) => mimeTypes[format as Format] === sourceFile.type,
+        ? (Object.keys(mimeTypes).find((format) =>
+            mimeTypes[format as Format].includes(sourceFile.type),
           ) as Format)
         : null,
     [sourceFile],
@@ -72,7 +72,8 @@ function App() {
   const selectFile = (file?: File) => {
     if (!file) return;
 
-    if (!Object.values(mimeTypes).includes(file.type)) {
+    console.log(`input file type: ${file.type}`);
+    if (!Object.values(mimeTypes).flat().includes(file.type)) {
       setError(
         `${file.type} はサポートされていない形式です。PNG、JPEG、WebP、MP4、WebM、AVI、MOV のいずれかを選択してください。`,
       );
@@ -108,7 +109,7 @@ function App() {
       setConvertedFile(
         new File([uint8Array as BlobPart], `${stem}.${extension}`, {
           type:
-            mimeTypes[convertedFormat] ||
+            mimeTypes[convertedFormat][0] ||
             (IMAGE_FORMATS.includes(convertedFormat as ImageFormat)
               ? `image/${extension}`
               : `video/${extension}`),
