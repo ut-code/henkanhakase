@@ -11,19 +11,23 @@
 
 ## ディレクトリ構成
 
-| パス                   | 内容                                                          |
-| ---------------------- | ------------------------------------------------------------- |
-| `dist`                 | ビルド成果物の出力先ディレクトリ。`npm run build`で生成される |
-| `node_modules`         | npmの依存パッケージ。`npm install`で生成される                |
-| `public`               | ビルド後にルートに置かれる。画像など                          |
-| `src/App.css`          | スタイルシート                                                |
-| `src/App.tsx`          | フロントエンドの本体                                          |
-| `src-tauri/icons`      | アプリケーションアイコン                                      |
-| `src-tauri/src/lib.rs` | 変換処理のロジック                                            |
-| `.gitignore`           | Gitで管理しないファイルの設定                                 |
-| `package-lock.json`    | npmの依存パッケージのバージョンを固定するためのファイル       |
-| `package.json`         | npmの設定ファイル                                             |
-| `README.md`            | この文章                                                      |
+| パス                        | 内容                                                          |
+| --------------------------- | ------------------------------------------------------------- |
+| `dist`                      | ビルド成果物の出力先ディレクトリ。`npm run build`で生成される |
+| `node_modules`              | npmの依存パッケージ。`npm install`で生成される                |
+| `public`                    | ビルド後にルートに置かれる。画像など                          |
+| `src/App.css`               | スタイルシート                                                |
+| `src/App.tsx`               | フロントエンドの本体                                          |
+| `src-tauri/binaries`        | FFmpegのバイナリファイル。sidecarで使用されている             |
+| `src-tauri/icons`           | アプリケーションアイコン                                      |
+| `src-tauri/src/lib.rs`      | 変換処理のロジック                                            |
+| `src-tauri/.gitignore`      | Gitで管理しないファイルの設定(バックエンド)                   |
+| `src-tauri/tauri.conf.json` | Tauriの設定ファイル                                           |
+| `src-tauri/Cargo.toml`      | Rustの設定ファイル                                            |
+| `.gitignore`                | Gitで管理しないファイルの設定                                 |
+| `package-lock.json`         | npmの依存パッケージのバージョンを固定するためのファイル       |
+| `package.json`              | npmの設定ファイル                                             |
+| `README.md`                 | この文章                                                      |
 
 ## インストール
 
@@ -35,11 +39,6 @@
 
    ```bash
    winget install --id Rustlang.Rustup
-   ```
-
-3. FFmpegのインストール
-   ```bash
-   winget install -e --id Gyan.FFmpeg
    ```
 
 ### MacOSの場合
@@ -60,20 +59,57 @@
    source ~/.zshrc
    ```
 
-3. FFmpegのインストール
+## FFmpegのバイナリファイルの設置
+
+1. `src-tauri/binaries`ディレクトリを作成
+
+2. Linux用のバイナリファイルの用意
+   1. https://github.com/BtbN/FFmpeg-Builds/releases から`ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz`をダウンロード
+   2. 解凍して出てくる`bin/ffmpeg`を`src-tauri/binaries`配下に設置
+   3. `fmpeg-x86_64-unknown-linux-gnu`にリネームする
+
+3. Windows用のバイナリファイルの用意
+   1. https://www.gyan.dev/ffmpeg/builds/ から`ffmpeg-release-full.7z`をダウンロード
+   2. 解凍して出てくる`bin/ffmpeg.exe`を`src-tauri/binaries`配下に設置
+   3. `ffmpeg-x86_64-pc-windows-msvc.exe`にリネームする
+
+4. MacOS(Intel)用のバイナリファイルの用意
+   1. https://evermeet.cx/ffmpeg/ から`ffmpeg-9.0.1.7z`をダウンロード
+   2. 解凍して出てくる`ffmpeg`を`src-tauri/binaries`配下に設置
+   3. `ffmpeg-x86_64-apple-darwin`にリネームする
+
+5. MacOS(Apple Silicon)用のバイナリファイルの用意
+   1. https://www.osxexperts.net/ で"Download ffmpeg 9.0 (Apple Silicon)"をクリックして`ffmpeg9arm.zip`をダウンロード
+   2. 解凍して出てくる`ffmpeg`を`src-tauri/binaries`配下に設置
+   3. `ffmpeg-aarch64-apple-darwin`にリネームする
+
+6. バイナリファイルの実行権限を付与(初回のみ)
+
    ```bash
-   brew install ffmpeg-full
+   chmod +x src-tauri/binaries/ffmpeg-*
    ```
 
 ## 開発
 
-- 依存パッケージのインストール
+- 依存パッケージのインストール(`package.json`が更新されたときに実行)
 
   ```bash
   npm install
   ```
 
-- 開発環境でアプリケーションを起動(ctrl + C / ⌃Cで終了)
+- 新たなパッケージのインストール
+
+  ```bash
+  npm install <パッケージ名>
+  ```
+
+- tauriのプラグインのインストール
+
+  ```bash
+  npm run tauri add <プラグイン名>
+  ```
+
+- 開発環境でアプリケーションを起動(`ctrl + C` / `⌃C`で終了)
 
   ```bash
   npm run tauri dev
@@ -85,7 +121,20 @@
   npm run tauri build
   ```
 
-- FFmpegでファイル形式を変換する例(プロジェクトのルートにinput.jpgを置く)
+- FFmpegのインストール(バイナリファイルを設置するため、インストールしなくてもアプリケーションは動作する)
+  - Windowsの場合
+
+  ```bash
+  winget install -e --id Gyan.FFmpeg
+  ```
+
+  - MacOSの場合
+
+  ```bash
+  brew install ffmpeg-full
+  ```
+
+- FFmpegでファイル形式を変換する例(プロジェクトのルートに`input.jpg`を置く)
   ```bash
   ffmpeg -i input.jpg output.png
   ```

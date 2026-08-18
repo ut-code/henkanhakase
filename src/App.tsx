@@ -1,14 +1,22 @@
-import { useRef, useState } from "react";
-import imageCompression from "browser-image-compression";
+import { useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 
-const formats = ["PNG", "JPEG", "WebP"];
+const IMAGE_FORMATS = ["PNG", "JPEG", "WebP"] as const;
+const VIDEO_FORMATS = ["MP4", "WebM", "AVI", "MOV"] as const;
+type ImageFormat = (typeof IMAGE_FORMATS)[number];
+type VideoFormat = (typeof VIDEO_FORMATS)[number];
+type Format = ImageFormat | VideoFormat;
 
-const mimeTypes: Record<string, string> = {
-  PNG: "image/png",
-  JPEG: "image/jpeg",
-  WebP: "image/webp",
+const mimeTypes: Record<Format, string[]> = {
+  PNG: ["image/png", "image/x-png"],
+  JPEG: ["image/jpeg", "image/pjpeg", "image/jpg"],
+  WebP: ["image/webp"],
+  MP4: ["video/mp4"],
+  WebM: ["video/webm"],
+  AVI: ["video/x-msvideo", "video/avi", "video/msvideo", "video/vnd.avi"],
+  MOV: ["video/quicktime", "video/mov", "video/x-quicktime"],
 };
 
 function UploadIcon() {
@@ -41,10 +49,21 @@ function FileIcon() {
 }
 
 function App() {
-  const [format, setFormat] = useState("PNG");
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [convertedFile, setConvertedFile] = useState<File | null>(null);
+  const sourceFormat = useMemo<Format | null>(
+    () =>
+      sourceFile
+        ? (Object.keys(mimeTypes).find((format) =>
+            mimeTypes[format as Format].includes(sourceFile.type),
+          ) as Format)
+        : null,
+    [sourceFile],
+  );
+  const [convertedFormat, setConvertedFormat] = useState<
+    ImageFormat | VideoFormat
+  >("PNG");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,8 +72,11 @@ function App() {
   const selectFile = (file?: File) => {
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("仮配線では画像ファイル（PNG・JPEG・WebP）のみ変換できます。");
+    console.log(`input file type: ${file.type}`);
+    if (!Object.values(mimeTypes).flat().includes(file.type)) {
+      setError(
+        `${file.type} はサポートされていない形式です。PNG、JPEG、WebP、MP4、WebM、AVI、MOV のいずれかを選択してください。`,
+      );
       return;
     }
 
@@ -70,22 +92,33 @@ function App() {
     setError(null);
 
     try {
-      const converted = await imageCompression(sourceFile, {
-        fileType: mimeTypes[format],
-        useWebWorker: true,
-        initialQuality: 0.92,
-      });
-
-      const extension = format === "JPEG" ? "jpg" : format.toLowerCase();
+      const extension =
+        convertedFormat === "JPEG" ? "jpg" : convertedFormat.toLowerCase();
       const stem = sourceFile.name.replace(/\.[^.]+$/, "");
 
-      const outputFile = new File([converted], `${stem}.${extension}`, {
-        type: mimeTypes[format],
+      const buffer = await sourceFile.arrayBuffer();
+      const result = await invoke<number[] | Uint8Array>("convert_file", {
+        data: Array.from(new Uint8Array(buffer)),
+        stem,
+        format: extension,
       });
 
-      setConvertedFile(outputFile);
-    } catch {
-      setError("変換に失敗しました。別の画像ファイルでお試しください。");
+      const uint8Array =
+        result instanceof Uint8Array ? result : new Uint8Array(result);
+
+      setConvertedFile(
+        new File([uint8Array as BlobPart], `${stem}.${extension}`, {
+          type:
+            mimeTypes[convertedFormat][0] ||
+            (IMAGE_FORMATS.includes(convertedFormat as ImageFormat)
+              ? `image/${extension}`
+              : `video/${extension}`),
+        }),
+      );
+    } catch (error) {
+      setError(
+        `Error during conversion: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       setIsConverting(false);
     }
@@ -111,8 +144,8 @@ function App() {
     }
   };
 
-  const handleFormatChange = (newFormat: string) => {
-    setFormat(newFormat);
+  const handleFormatChange = (newFormat: ImageFormat | VideoFormat) => {
+    setConvertedFormat(newFormat);
     setConvertedFile(null);
   };
 
@@ -160,7 +193,6 @@ function App() {
           >
             H
           </span>
-
           変換博士
         </div>
 
@@ -282,17 +314,13 @@ function App() {
             <span className="text-xs">
               {sourceFile ? "別のファイルを選択" : "または、クリックして選択"}
             </span>
-
-            <em className="mt-4.25 text-[10px] not-italic text-[#a5afbf]">
-              仮配線の対応形式：PNG、JPEG、WebP
-            </em>
           </button>
 
           <input
             ref={fileInput}
             type="file"
             hidden
-            accept="image/png,image/jpeg,image/webp"
+            accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,video/avi,video/mov"
             onChange={(event) => selectFile(event.target.files?.[0])}
           />
 
@@ -320,8 +348,12 @@ function App() {
 
           <select
             id="format"
-            value={format}
-            onChange={(event) => handleFormatChange(event.target.value)}
+            value={convertedFormat}
+            onChange={(event) =>
+              handleFormatChange(
+                event.target.value as ImageFormat | VideoFormat,
+              )
+            }
             className="
               w-31.5
               rounded-[9px]
@@ -336,9 +368,10 @@ function App() {
               outline-[#6578f7]
             "
           >
-            {formats.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
+            {IMAGE_FORMATS.includes(sourceFormat as ImageFormat) &&
+              IMAGE_FORMATS.map((item) => <option key={item}>{item}</option>)}
+            {VIDEO_FORMATS.includes(sourceFormat as VideoFormat) &&
+              VIDEO_FORMATS.map((item) => <option key={item}>{item}</option>)}
           </select>
 
           {/* Arrow */}
@@ -350,7 +383,7 @@ function App() {
               max-[980px]:mb-8.25
               max-[980px]:rotate-90
             "
-            aria-label={`${format} に変換`}
+            aria-label={`${convertedFormat} に変換`}
           >
             <span className="h-px flex-1 bg-linear-to-r from-[#cad2f9] to-[#7081ef]" />
 
@@ -374,7 +407,7 @@ function App() {
               max-[980px]:bottom-0
             "
           >
-            <b className="text-[#596ff1]">{format}</b> に変換
+            <b className="text-[#596ff1]">{convertedFormat}</b> に変換
           </p>
 
           <button
@@ -483,7 +516,7 @@ function App() {
               {convertedFile
                 ? `${Math.ceil(
                     convertedFile.size / 1024,
-                  ).toLocaleString()} KB ・ ${format} 形式`
+                  ).toLocaleString()} KB ・ ${convertedFormat} 形式`
                 : "ファイルを追加して変換を開始してください"}
             </span>
 
@@ -552,9 +585,7 @@ function App() {
           >
             ⌃
           </span>
-
           詳細
-
           <span className="ml-2.75 font-normal text-[#abb4c1]">
             変換設定・処理状況を確認
           </span>
@@ -563,8 +594,7 @@ function App() {
         {detailsOpen && (
           <div className="flex gap-8.5 border-t border-[#edf0f5] px-4.5 pt-3.25 pb-4 text-xs text-[#7b8799]">
             <span>入力：{sourceFile?.name ?? "未選択"}</span>
-            <span>出力形式：{format}</span>
-            <span>品質：92%（仮設定）</span>
+            <span>出力形式：{convertedFormat}</span>
             <span>保存先：変換完了後に選択</span>
           </div>
         )}
