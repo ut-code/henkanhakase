@@ -5,9 +5,16 @@ import { useMemo, useRef, useState } from "react";
 
 const IMAGE_FORMATS = ["PNG", "JPEG", "WebP", "GIF"] as const;
 const VIDEO_FORMATS = ["MP4", "WebM", "AVI", "MOV"] as const;
+const AUDIO_FORMATS = ["MP3", "M4A", "AAC", "WAV", "AIFF", "FLAC", "WMA", "OGG", "OPUS"] as const;
+const SUPPORTED_FORMATS = [
+  ...IMAGE_FORMATS,
+  ...VIDEO_FORMATS,
+  ...AUDIO_FORMATS,
+];
 type ImageFormat = (typeof IMAGE_FORMATS)[number];
 type VideoFormat = (typeof VIDEO_FORMATS)[number];
-type Format = ImageFormat | VideoFormat;
+type AudioFormat = (typeof AUDIO_FORMATS)[number];
+type Format = ImageFormat | VideoFormat | AudioFormat;
 
 const mimeTypes: Record<Format, string[]> = {
     PNG: ["image/png", "image/x-png"],
@@ -29,6 +36,15 @@ const mimeTypes: Record<Format, string[]> = {
         "video/mov",
         "video/x-quicktime",
     ],
+      MP3: ["audio/mpeg", "audio/mp3", "audio/x-mpeg", "audio/x-mpeg-3", "audio/mpeg3"],
+  M4A: ["audio/mp4", "audio/x-m4a", "audio/m4a"],
+  AAC: ["audio/aac", "audio/x-aac"],
+  WAV: ["audio/wav", "audio/x-wav", "audio/wave", "audio/x-pn-wav", "audio/vnd.wave"],
+  AIFF: ["audio/aiff", "audio/x-aiff", "audio/aif", "audio/x-aifc"],
+  FLAC: ["audio/flac", "audio/x-flac"],
+  WMA: ["audio/x-ms-wma"],
+  OGG: ["audio/ogg", "application/ogg"],
+  OPUS: ["audio/opus"],
 };
 
 function UploadIcon() {
@@ -103,6 +119,10 @@ function App() {
       return [...VIDEO_FORMATS, "GIF"];
     }
 
+    if (AUDIO_FORMATS.includes(sourceFormat as AudioFormat)) {
+      return [...AUDIO_FORMATS];
+    }
+
     return [...IMAGE_FORMATS];
     }, [sourceFormat]);
 
@@ -115,7 +135,7 @@ function App() {
 
         if (!detectedFormat) {
             setError(
-                `${file.type} はサポートされていない形式です。`,
+                `${file.type} はサポートされていない形式です。対応形式：${SUPPORTED_FORMATS.join(", ")}`,
             );
             return;
         }
@@ -382,13 +402,15 @@ function App() {
                         </span>
                     </button>
 
-                    <input
-                        ref={fileInput}
-                        type="file"
-                        hidden
-                        accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/avi,video/mov"
-                        onChange={(event) => selectFile(event.target.files?.[0])}
-                    />
+          <input
+            ref={fileInput}
+            type="file"
+            hidden
+            accept={[
+              ...Object.values(mimeTypes).flat(),
+            ].join(",")}
+            onChange={(event) => selectFile(event.target.files?.[0])}
+          />
 
                     {error && (
                         <p className="my-2 text-[11px] leading-[1.6] text-[#d76269]">
@@ -415,6 +437,7 @@ function App() {
                     <select
                         id="format"
                         value={convertedFormat}
+                        disabled={!sourceFile}
                         onChange={(event) =>
                             handleFormatChange(event.target.value as Format)
                         }
@@ -466,16 +489,17 @@ function App() {
                         />
                     </div>
 
-                    <p
-                        className="
+          <p
+            className={`
               mt-3.5 text-xs text-[#9aa6b7]
 
               max-[980px]:absolute
               max-[980px]:bottom-0
-            "
-                    >
-                        <b className="text-[#596ff1]">{convertedFormat}</b> に変換
-                    </p>
+              ${!sourceFile ? "invisible" : ""}
+            `}
+          >
+            <b className="text-[#596ff1]">{convertedFormat}</b> に変換
+          </p>
 
                     <button
                         type="button"
