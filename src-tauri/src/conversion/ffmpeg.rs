@@ -12,11 +12,7 @@ pub fn build_args(
     options.validate()?;
 
     if input_format.is_video() && output_format == FileFormat::Gif {
-        return Ok(build_video_to_gif_args(
-            input_path,
-            output_path,
-            options,
-        ));
+        return Ok(build_video_to_gif_args(input_path, output_path, options));
     }
 
     if input_format == FileFormat::Gif && output_format.is_video() {
@@ -32,10 +28,7 @@ pub fn build_args(
     Ok(build_default_args(input_path, output_path))
 }
 
-fn build_default_args(
-    input_path: &Path,
-    output_path: &Path,
-) -> Vec<String> {
+fn build_default_args(input_path: &Path, output_path: &Path) -> Vec<String> {
     vec![
         "-y".into(),
         "-i".into(),
@@ -51,10 +44,7 @@ fn build_video_to_gif_args(
 ) -> Vec<String> {
     let fps = options.fps.unwrap_or(15);
 
-    let scale = build_scale_filter(
-        options.width.or(Some(640)),
-        options.height,
-    );
+    let scale = build_scale_filter(options.width.or(Some(640)), options.height);
 
     let filter = format!(
         "fps={fps},{scale}:flags=lanczos,\
@@ -79,11 +69,7 @@ fn build_gif_to_video_args(
     output_format: FileFormat,
     options: &ConversionOptions,
 ) -> Vec<String> {
-    let mut args = vec![
-        "-y".into(),
-        "-i".into(),
-        path_to_string(input_path),
-    ];
+    let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
 
     let scale = match (options.width, options.height) {
         (Some(width), Some(height)) => {
@@ -91,17 +77,11 @@ fn build_gif_to_video_args(
         }
 
         (Some(width), None) => {
-            format!(
-                "scale={}:trunc(ow/a/2)*2",
-                make_even(width)
-            )
+            format!("scale={}:trunc(ow/a/2)*2", make_even(width))
         }
 
         (None, Some(height)) => {
-            format!(
-                "scale=trunc(oh*a/2)*2:{}",
-                make_even(height)
-            )
+            format!("scale=trunc(oh*a/2)*2:{}", make_even(height))
         }
 
         (None, None) => {
@@ -118,21 +98,49 @@ fn build_gif_to_video_args(
         args.push(fps.to_string());
     }
 
-    // MP4 / MOV は互換性を考えて yuv420p にする
-    if matches!(output_format, FileFormat::Mp4 | FileFormat::Mov) {
-        args.push("-pix_fmt".into());
-        args.push("yuv420p".into());
-    }
+    append_video_output_options(&mut args, output_format);
 
     args.push(path_to_string(output_path));
 
     args
 }
 
-fn build_scale_filter(
-    width: Option<u32>,
-    height: Option<u32>,
-) -> String {
+fn append_video_output_options(args: &mut Vec<String>, format: FileFormat) {
+    match format {
+        FileFormat::Mp4 => {
+            args.extend([
+                "-c:v".into(),
+                "libx264".into(),
+                "-pix_fmt".into(),
+                "yuv420p".into(),
+            ]);
+        }
+
+        FileFormat::Webm => {
+            args.extend([
+                "-c:v".into(),
+                "libvpx-vp9".into(),
+                "-pix_fmt".into(),
+                "yuva420p".into(),
+            ]);
+        }
+
+        FileFormat::Mov => {
+            args.extend([
+                "-c:v".into(),
+                "libx264".into(),
+                "-pix_fmt".into(),
+                "yuv420p".into(),
+            ]);
+        }
+
+        FileFormat::Avi => {}
+
+        _ => {}
+    }
+}
+
+fn build_scale_filter(width: Option<u32>, height: Option<u32>) -> String {
     match (width, height) {
         (Some(width), Some(height)) => {
             format!("scale={width}:{height}")
@@ -146,9 +154,7 @@ fn build_scale_filter(
             format!("scale=-1:{height}")
         }
 
-        (None, None) => {
-            "scale=iw:ih".into()
-        }
+        (None, None) => "scale=iw:ih".into(),
     }
 }
 
