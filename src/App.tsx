@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
+import { useMemo, useRef, useState } from "react";
 
 const IMAGE_FORMATS = ["PNG", "JPEG", "WebP", "GIF"] as const;
 const VIDEO_FORMATS = ["MP4", "WebM", "AVI", "MOV"] as const;
@@ -448,12 +448,14 @@ function App() {
               max-[980px]:mb-8.25
               max-[980px]:rotate-90
             "
-                        aria-label={`${convertedFormat} に変換`}
-                    >
-                        <span className="h-px flex-1 bg-linear-to-r from-[#cad2f9] to-[#7081ef]" />
+          >
+            <span className="sr-only">{convertedFormat} に変換</span>
 
-                        <i
-                            className="
+            <span className="h-px flex-1 bg-linear-to-r from-[#cad2f9] to-[#7081ef]" />
+
+            <i
+              aria-hidden="true"
+              className="
                 -ml-1.5
                 size-2.75
                 rotate-45
