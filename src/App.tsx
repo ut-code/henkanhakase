@@ -95,29 +95,15 @@ function App() {
             return [];
         }
 
-        if (sourceFormat === "GIF") {
-            return [
-                "PNG",
-                "JPEG",
-                "WebP",
-                "MP4",
-                "WebM",
-                "AVI",
-                "MOV",
-            ];
-        }
+    if (sourceFormat === "GIF") {
+      return [...IMAGE_FORMATS, ...VIDEO_FORMATS];
+    }
 
-        if (VIDEO_FORMATS.includes(sourceFormat as VideoFormat)) {
-            return [
-                "MP4",
-                "WebM",
-                "AVI",
-                "MOV",
-                "GIF",
-            ];
-        }
+    if (VIDEO_FORMATS.includes(sourceFormat as VideoFormat)) {
+      return [...VIDEO_FORMATS, "GIF"];
+    }
 
-        return ["PNG", "JPEG", "WebP", "GIF"];
+    return [...IMAGE_FORMATS];
     }, [sourceFormat]);
 
     const selectFile = (file?: File) => {
