@@ -42,10 +42,7 @@ impl FileFormat {
     }
 
     pub fn is_video(self) -> bool {
-        matches!(
-            self,
-            Self::Mp4 | Self::Webm | Self::Avi | Self::Mov
-        )
+        matches!(self, Self::Mp4 | Self::Webm | Self::Avi | Self::Mov)
     }
 }
 
