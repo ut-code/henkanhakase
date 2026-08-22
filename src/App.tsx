@@ -159,6 +159,8 @@ function App() {
       setConvertedFormat("MP4");
     } else if (VIDEO_FORMATS.includes(detectedFormat as VideoFormat)) {
       setConvertedFormat("GIF");
+    } else if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
+      setConvertedFormat("MP3");
     } else {
       setConvertedFormat("PNG");
     }

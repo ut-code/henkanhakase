@@ -25,6 +25,33 @@ pub enum FileFormat {
 
     #[serde(rename = "mov")]
     Mov,
+
+    #[serde(rename = "mp3")]
+    Mp3,
+
+    #[serde(rename = "m4a")]
+    M4a,
+
+    #[serde(rename = "aac")]
+    Aac,
+
+    #[serde(rename = "wav")]
+    Wav,
+
+    #[serde(rename = "aiff")]
+    Aiff,
+
+    #[serde(rename = "flac")]
+    Flac,
+
+    #[serde(rename = "wma")]
+    Wma,
+
+    #[serde(rename = "ogg")]
+    Ogg,
+
+    #[serde(rename = "opus")]
+    Opus,
 }
 
 impl FileFormat {
@@ -38,6 +65,15 @@ impl FileFormat {
             Self::Webm => "webm",
             Self::Avi => "avi",
             Self::Mov => "mov",
+            Self::Mp3 => "mp3",
+            Self::M4a => "m4a",
+            Self::Aac => "aac",
+            Self::Wav => "wav",
+            Self::Aiff => "aiff",
+            Self::Flac => "flac",
+            Self::Wma => "wma",
+            Self::Ogg => "ogg",
+            Self::Opus => "opus",
         }
     }
 
