@@ -159,7 +159,7 @@ fn build_scale_filter(width: Option<u32>, height: Option<u32>) -> String {
 }
 
 fn make_even(value: u32) -> u32 {
-    if value % 2 == 0 {
+    if value.is_multiple_of(2) {
         value
     } else {
         value - 1
