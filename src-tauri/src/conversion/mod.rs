@@ -12,10 +12,7 @@ use tauri_plugin_shell::ShellExt;
 
 pub use types::ConversionRequest;
 
-pub async fn convert(
-    app: &AppHandle,
-    request: ConversionRequest,
-) -> Result<Vec<u8>, String> {
+pub async fn convert(app: &AppHandle, request: ConversionRequest) -> Result<Vec<u8>, String> {
     let workspace = TempWorkspace::new()?;
 
     let input_path = workspace
@@ -40,26 +37,19 @@ pub async fn convert(
     let output = app
         .shell()
         .sidecar("ffmpeg")
-        .map_err(|e| {
-            format!("FFmpeg Sidecar の初期化に失敗しました: {e}")
-        })?
+        .map_err(|e| format!("FFmpeg Sidecar の初期化に失敗しました: {e}"))?
         .args(args)
         .output()
         .await
-        .map_err(|e| {
-            format!("FFmpeg の実行に失敗しました: {e}")
-        })?;
+        .map_err(|e| format!("FFmpeg の実行に失敗しました: {e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        return Err(format!(
-            "FFmpeg による変換処理に失敗しました: {stderr}"
-        ));
+        return Err(format!("FFmpeg による変換処理に失敗しました: {stderr}"));
     }
 
-    fs::read(&output_path)
-        .map_err(|e| format!("出力ファイルの読み込みに失敗しました: {e}"))
+    fs::read(&output_path).map_err(|e| format!("出力ファイルの読み込みに失敗しました: {e}"))
 }
 
 struct TempWorkspace {
@@ -73,10 +63,7 @@ impl TempWorkspace {
             .map_err(|e| format!("一時ディレクトリ名の生成に失敗しました: {e}"))?
             .as_nanos();
 
-        let name = format!(
-            "henkanhakase-{}-{timestamp}",
-            std::process::id()
-        );
+        let name = format!("henkanhakase-{}-{timestamp}", std::process::id());
 
         let path = std::env::temp_dir().join(name);
 
