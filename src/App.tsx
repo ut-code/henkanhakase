@@ -115,6 +115,12 @@ function App() {
   const [isConverting, setIsConverting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [pngCompressionLevel, setPngCompressionLevel] = useState<number>(9);
+  const [jpegQV, setJpegQV] = useState<number>(3);
+  const [webpQV, setWebpQV] = useState<number>(75);
+  const [gifFPS, setGifFPS] = useState<number>(15);
+  const [gifMaxColors, setGifMaxColors] = useState<number>(256);
+
   const fileInput = useRef<HTMLInputElement>(null);
 
   const availableOutputFormats = useMemo<Format[]>(() => {
@@ -187,9 +193,16 @@ function App() {
           inputFormat: inputExtension,
           outputFormat: extension,
 
-          // 今はUI未実装なので空。
-          // 将来的にここへFPS等を渡す。
-          options: {},
+          options: detailsOpen
+            ? {
+                compressionLevel:
+                  convertedFormat === "PNG" ? pngCompressionLevel : undefined,
+                qVJpeg: convertedFormat === "JPEG" ? jpegQV : undefined,
+                qVWebp: convertedFormat === "WebP" ? webpQV : undefined,
+                fps: convertedFormat === "GIF" ? gifFPS : undefined,
+                maxColors: convertedFormat === "GIF" ? gifMaxColors : undefined,
+              }
+            : undefined,
         },
       });
 
@@ -677,16 +690,176 @@ function App() {
             ⌃
           </span>
           詳細
-          <span className="ml-2.75 font-normal text-[#abb4c1]">
-            変換設定・処理状況を確認
-          </span>
         </button>
 
         {detailsOpen && (
-          <div className="flex gap-8.5 border-t border-[#edf0f5] px-4.5 pt-3.25 pb-4 text-xs text-[#7b8799]">
-            <span>入力：{sourceFile?.name ?? "未選択"}</span>
-            <span>出力形式：{convertedFormat}</span>
-            <span>保存先：変換完了後に選択</span>
+          <div className="border-t border-[#edf0f5] px-5.5 py-4">
+            {sourceFile &&
+            IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ? (
+              <div className="flex flex-wrap items-center gap-6">
+                {convertedFormat === "PNG" && (
+                  <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label
+                        htmlFor="png-compression"
+                        className="font-semibold text-[#415166]"
+                      >
+                        圧縮レベル(可逆圧縮)
+                      </label>
+                      <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                        {pngCompressionLevel}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      id="png-compression"
+                      min="0"
+                      max="9"
+                      value={pngCompressionLevel}
+                      onChange={(e) =>
+                        setPngCompressionLevel(
+                          Number.parseInt(e.target.value, 10),
+                        )
+                      }
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+                    />
+                    <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+                      <span>0 (低圧縮)</span>
+                      <span>9 (高圧縮)</span>
+                    </div>
+                  </div>
+                )}
+                {convertedFormat === "JPEG" && (
+                  <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label
+                        htmlFor="jpeg-quality"
+                        className="font-semibold text-[#415166]"
+                      >
+                        圧縮レベル(非可逆圧縮)
+                      </label>
+                      <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                        {jpegQV}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      id="jpeg-quality"
+                      min="1"
+                      max="31"
+                      value={jpegQV}
+                      onChange={(e) =>
+                        setJpegQV(Number.parseInt(e.target.value, 10))
+                      }
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+                    />
+                    <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+                      <span>1 (高品質)</span>
+                      <span>31 (低品質)</span>
+                    </div>
+                  </div>
+                )}
+                {convertedFormat === "WebP" && (
+                  <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label
+                        htmlFor="webp-quality"
+                        className="font-semibold text-[#415166]"
+                      >
+                        品質(非可逆圧縮)
+                      </label>
+                      <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                        {webpQV}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      id="webp-quality"
+                      min="1"
+                      max="100"
+                      value={webpQV}
+                      onChange={(e) =>
+                        setWebpQV(Number.parseInt(e.target.value, 10))
+                      }
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+                    />
+                    <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+                      <span>1 (低品質)</span>
+                      <span>100 (高品質)</span>
+                    </div>
+                  </div>
+                )}
+                {convertedFormat === "GIF" && (
+                  <>
+                    {(sourceFormat === "GIF" ||
+                      VIDEO_FORMATS.includes(sourceFormat as VideoFormat)) && (
+                      <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <label
+                            htmlFor="gif-fps"
+                            className="font-semibold text-[#415166]"
+                          >
+                            FPS
+                          </label>
+                          <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                            {gifFPS} fps
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          id="gif-fps"
+                          min="1"
+                          max="120"
+                          value={gifFPS}
+                          onChange={(e) =>
+                            setGifFPS(Number.parseInt(e.target.value, 10))
+                          }
+                          className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+                        />
+                        <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+                          <span>1 fps</span>
+                          <span>120 fps</span>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <label
+                          htmlFor="gif-max-colors"
+                          className="font-semibold text-[#415166]"
+                        >
+                          色数
+                        </label>
+                        <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                          {gifMaxColors} 色
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        id="gif-max-colors"
+                        min="2"
+                        max="256"
+                        value={gifMaxColors}
+                        onChange={(e) =>
+                          setGifMaxColors(Number.parseInt(e.target.value, 10))
+                        }
+                        className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+                      />
+                      <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+                        <span>2 色</span>
+                        <span>256 色</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-[#9aa6b7]">
+                {sourceFile
+                  ? "この変換形式で設定可能な詳細オプションはありません"
+                  : "ファイルを選択するとオプションを設定できます"}
+              </p>
+            )}
           </div>
         )}
       </footer>

@@ -11,8 +11,8 @@ pub fn build_args(
 ) -> Result<Vec<String>, String> {
     options.validate()?;
 
-    if input_format.is_video() && output_format == FileFormat::Gif {
-        return Ok(build_video_to_gif_args(input_path, output_path, options));
+    if (input_format.is_video() || input_format == FileFormat::Gif) && output_format == FileFormat::Gif {
+        return Ok(build_video_or_gif_to_gif_args(input_path, output_path, options));
     }
 
     if input_format == FileFormat::Gif && output_format.is_video() {
@@ -25,32 +25,50 @@ pub fn build_args(
     }
 
     // 既存の変換はこれまでと同様 FFmpeg に任せる
-    Ok(build_default_args(input_path, output_path))
+    Ok(build_default_args(input_path, output_path, options))
 }
 
-fn build_default_args(input_path: &Path, output_path: &Path) -> Vec<String> {
-    vec![
+fn build_default_args(
+    input_path: &Path,
+    output_path: &Path,
+    options: &ConversionOptions,
+) -> Vec<String> {
+    let mut args = vec![
         "-y".into(),
         "-i".into(),
         path_to_string(input_path),
-        path_to_string(output_path),
-    ]
+    ];
+
+    if let Some(compression_level) = options.compression_level {
+        args.extend(["-compression_level".into(), compression_level.to_string()]);
+    }
+    if let Some(q_v_jpeg) = options.q_v_jpeg {
+        args.extend(["-q:v".into(), q_v_jpeg.to_string()]);
+    }
+    if let Some(q_v_webp) = options.q_v_webp {
+        args.extend(["-q:v".into(), q_v_webp.to_string()]);
+    }
+
+    args.push(path_to_string(output_path));
+
+    args
 }
 
-fn build_video_to_gif_args(
+fn build_video_or_gif_to_gif_args(
     input_path: &Path,
     output_path: &Path,
     options: &ConversionOptions,
 ) -> Vec<String> {
     let fps = options.fps.unwrap_or(15);
 
-    let scale = build_scale_filter(options.width.or(Some(640)), options.height);
+    let scale = build_scale_filter(options.width, options.height);
 
     let filter = format!(
         "fps={fps},{scale}:flags=lanczos,\
 split[s0][s1];\
-[s0]palettegen[p];\
-[s1][p]paletteuse"
+[s0]palettegen=max_colors={max_colors}:reserve_transparent=0[p];\
+[s1][p]paletteuse",
+        max_colors = options.max_colors.unwrap_or(256)
     );
 
     vec![

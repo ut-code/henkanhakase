@@ -85,19 +85,17 @@ impl FileFormat {
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversionOptions {
-    pub fps: Option<u32>,
     pub width: Option<u32>,
     pub height: Option<u32>,
+    pub compression_level: Option<u32>,
+    pub q_v_jpeg: Option<u32>,
+    pub q_v_webp: Option<u32>,
+    pub fps: Option<u32>,
+    pub max_colors: Option<u32>,
 }
 
 impl ConversionOptions {
     pub fn validate(&self) -> Result<(), String> {
-        if let Some(fps) = self.fps {
-            if !(1..=120).contains(&fps) {
-                return Err("FPS は 1〜120 の範囲で指定してください".into());
-            }
-        }
-
         if let Some(width) = self.width {
             if width == 0 {
                 return Err("幅は 1 以上で指定してください".into());
@@ -110,6 +108,35 @@ impl ConversionOptions {
             }
         }
 
+        if let Some(compression_level) = self.compression_level {
+            if !(0..=9).contains(&compression_level) {
+                return Err("compression_levelは 0〜9 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(q_v_jpeg) = self.q_v_jpeg {
+            if !(0..=31).contains(&q_v_jpeg) {
+                return Err("q:v は 0〜31 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(q_v_webp) = self.q_v_webp {
+            if !(1..=100).contains(&q_v_webp) {
+                return Err("q:v は 1〜100 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(fps) = self.fps {
+            if !(1..=120).contains(&fps) {
+                return Err("fps は 1〜120 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(max_colors) = self.max_colors {
+            if !(2..=256).contains(&max_colors) {
+                return Err("max_colors は 2〜256 の範囲で指定してください".into());
+            }
+        }
         Ok(())
     }
 }
