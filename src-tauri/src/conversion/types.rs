@@ -80,6 +80,20 @@ impl FileFormat {
     pub fn is_video(self) -> bool {
         matches!(self, Self::Mp4 | Self::Webm | Self::Avi | Self::Mov)
     }
+    pub fn is_audio(self) -> bool {
+        matches!(
+            self,
+            Self::Mp3
+                | Self::M4a
+                | Self::Aac
+                | Self::Wav
+                | Self::Aiff
+                | Self::Flac
+                | Self::Wma
+                | Self::Ogg
+                | Self::Opus
+        )
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

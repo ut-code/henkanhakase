@@ -24,7 +24,12 @@ pub fn build_args(
         ));
     }
 
-    // 既存の変換はこれまでと同様 FFmpeg に任せる
+    if input_format.is_video()
+        && output_format.is_audio()
+    {
+        return Ok(build_video_to_audio_args(input_path, output_path, options));
+    }
+
     Ok(build_default_args(input_path, output_path, options))
 }
 
@@ -117,6 +122,23 @@ fn build_gif_to_video_args(
     }
 
     append_video_output_options(&mut args, output_format);
+
+    args.push(path_to_string(output_path));
+
+    args
+}
+
+fn build_video_to_audio_args(
+    input_path: &Path,
+    output_path: &Path,
+    options: &ConversionOptions, // 現時点では不使用だが、将来的にオーディオ変換オプションを追加するため引数として受け取る
+) -> Vec<String> {
+    let mut args = vec![
+        "-y".into(),
+        "-i".into(),
+        path_to_string(input_path),
+        "-vn".into(),
+    ];
 
     args.push(path_to_string(output_path));
 
