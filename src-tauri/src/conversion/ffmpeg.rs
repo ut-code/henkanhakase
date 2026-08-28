@@ -9,12 +9,20 @@ pub fn build_args(
     output_format: FileFormat,
     options: &ConversionOptions,
 ) -> Result<Vec<String>, String> {
-    options.validate()?;
+    options.validate(output_format)?;
 
-    if (input_format.is_video() || input_format == FileFormat::Gif) && output_format == FileFormat::Gif {
-        return Ok(build_video_or_gif_to_gif_args(input_path, output_path, options));
+    // 動画 / GIF → GIF
+    if (input_format.is_video() || input_format == FileFormat::Gif)
+        && output_format == FileFormat::Gif
+    {
+        return Ok(build_video_or_gif_to_gif_args(
+            input_path,
+            output_path,
+            options,
+        ));
     }
 
+    // GIF → 動画
     if input_format == FileFormat::Gif && output_format.is_video() {
         return Ok(build_gif_to_video_args(
             input_path,
@@ -22,6 +30,11 @@ pub fn build_args(
             output_format,
             options,
         ));
+    }
+
+    // 音声変換
+    if output_format.is_audio() {
+        return build_audio_args(input_path, output_path, output_format, options);
     }
 
     // 既存の変換はこれまでと同様 FFmpeg に任せる
@@ -33,18 +46,16 @@ fn build_default_args(
     output_path: &Path,
     options: &ConversionOptions,
 ) -> Vec<String> {
-    let mut args = vec![
-        "-y".into(),
-        "-i".into(),
-        path_to_string(input_path),
-    ];
+    let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
 
     if let Some(compression_level) = options.compression_level {
         args.extend(["-compression_level".into(), compression_level.to_string()]);
     }
+
     if let Some(q_v_jpeg) = options.q_v_jpeg {
         args.extend(["-q:v".into(), q_v_jpeg.to_string()]);
     }
+
     if let Some(q_v_webp) = options.q_v_webp {
         args.extend(["-q:v".into(), q_v_webp.to_string()]);
     }
@@ -53,6 +64,166 @@ fn build_default_args(
 
     args
 }
+
+// ============================================================
+// Audio
+// ============================================================
+
+fn build_audio_args(
+    input_path: &Path,
+    output_path: &Path,
+    output_format: FileFormat,
+    options: &ConversionOptions,
+) -> Result<Vec<String>, String> {
+    let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
+
+    let audio_options = options.audio.as_ref();
+
+    match output_format {
+        FileFormat::Mp3 => {
+            args.extend(["-c:a".into(), "libmp3lame".into()]);
+
+            if let Some(audio) = audio_options {
+                args.extend(["-b:a".into(), audio.bitrate.as_str().into()]);
+
+                append_audio_common_options(&mut args, audio);
+            }
+        }
+
+        FileFormat::M4a => {
+            args.extend(["-c:a".into(), "aac".into()]);
+
+            if let Some(audio) = audio_options {
+                args.extend(["-b:a".into(), audio.bitrate.as_str().into()]);
+
+                append_audio_common_options(&mut args, audio);
+            }
+        }
+
+        FileFormat::Aac => {
+            args.extend(["-c:a".into(), "aac".into()]);
+
+            if let Some(audio) = audio_options {
+                args.extend(["-b:a".into(), audio.bitrate.as_str().into()]);
+
+                append_audio_common_options(&mut args, audio);
+            }
+        }
+
+        FileFormat::Flac => {
+            args.extend(["-c:a".into(), "flac".into()]);
+
+            if let Some(audio) = audio_options {
+                if let Some(level) = audio.flac_compression_level {
+                    args.extend(["-compression_level".into(), level.to_string()]);
+                }
+
+                append_audio_common_options(&mut args, audio);
+            }
+        }
+
+        FileFormat::Ogg => {
+            args.extend(["-c:a".into(), "libvorbis".into()]);
+
+            if let Some(audio) = audio_options {
+                if let Some(quality) = audio.vorbis_quality {
+                    args.extend(["-q:a".into(), quality.to_string()]);
+                }
+
+                append_audio_common_options(&mut args, audio);
+            }
+        }
+
+        FileFormat::Opus => {
+            args.extend(["-c:a".into(), "libopus".into()]);
+
+            if let Some(audio) = audio_options {
+                args.extend(["-b:a".into(), audio.bitrate.as_str().into()]);
+
+                append_audio_common_options(&mut args, audio);
+            }
+        }
+
+        FileFormat::Wma => {
+            args.extend(["-c:a".into(), "wmav2".into()]);
+
+            if let Some(audio) = audio_options {
+                args.extend(["-b:a".into(), audio.bitrate.as_str().into()]);
+
+                append_audio_common_options(&mut args, audio);
+            }
+        }
+
+        FileFormat::Wav => {
+            let bit_depth = audio_options
+                .and_then(|audio| audio.pcm_bit_depth)
+                .unwrap_or(16);
+
+            let codec = match bit_depth {
+                16 => "pcm_s16le",
+                24 => "pcm_s24le",
+                32 => "pcm_s32le",
+                _ => {
+                    return Err("WAV のPCMビット深度が不正です".into());
+                }
+            };
+
+            args.extend(["-c:a".into(), codec.into()]);
+
+            if let Some(audio) = audio_options {
+                append_audio_common_options(&mut args, audio);
+            }
+        }
+
+        FileFormat::Aiff => {
+            let bit_depth = audio_options
+                .and_then(|audio| audio.pcm_bit_depth)
+                .unwrap_or(16);
+
+            let codec = match bit_depth {
+                16 => "pcm_s16be",
+                24 => "pcm_s24be",
+                32 => "pcm_s32be",
+                _ => {
+                    return Err("AIFF のPCMビット深度が不正です".into());
+                }
+            };
+
+            args.extend(["-c:a".into(), codec.into()]);
+
+            if let Some(audio) = audio_options {
+                append_audio_common_options(&mut args, audio);
+            }
+        }
+
+        _ => {
+            return Err(format!(
+                "音声出力形式としてサポートされていません: {:?}",
+                output_format
+            ));
+        }
+    }
+
+    args.push(path_to_string(output_path));
+
+    Ok(args)
+}
+
+/// MP3 / AAC / FLAC / Vorbis / Opus / PCM などに共通する
+/// サンプルレート・チャンネル設定
+fn append_audio_common_options(args: &mut Vec<String>, options: &super::types::AudioOptions) {
+    if let Some(sample_rate) = options.sample_rate {
+        args.extend(["-ar".into(), sample_rate.to_string()]);
+    }
+
+    if let Some(channels) = options.channels {
+        args.extend(["-ac".into(), channels.to_string()]);
+    }
+}
+
+// ============================================================
+// GIF
+// ============================================================
 
 fn build_video_or_gif_to_gif_args(
     input_path: &Path,
@@ -80,6 +251,10 @@ split[s0][s1];\
         path_to_string(output_path),
     ]
 }
+
+// ============================================================
+// GIF → Video
+// ============================================================
 
 fn build_gif_to_video_args(
     input_path: &Path,
@@ -157,6 +332,10 @@ fn append_video_output_options(args: &mut Vec<String>, format: FileFormat) {
         _ => {}
     }
 }
+
+// ============================================================
+// Utility
+// ============================================================
 
 fn build_scale_filter(width: Option<u32>, height: Option<u32>) -> String {
     match (width, height) {

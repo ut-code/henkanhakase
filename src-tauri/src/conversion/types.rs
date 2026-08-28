@@ -80,6 +80,153 @@ impl FileFormat {
     pub fn is_video(self) -> bool {
         matches!(self, Self::Mp4 | Self::Webm | Self::Avi | Self::Mov)
     }
+
+    pub fn is_audio(self) -> bool {
+        matches!(
+            self,
+            Self::Mp3
+                | Self::M4a
+                | Self::Aac
+                | Self::Wav
+                | Self::Aiff
+                | Self::Flac
+                | Self::Wma
+                | Self::Ogg
+                | Self::Opus
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AudioBitrate {
+    #[serde(rename = "64k")]
+    K64,
+
+    #[serde(rename = "96k")]
+    K96,
+
+    #[default]
+    #[serde(rename = "128k")]
+    K128,
+
+    #[serde(rename = "160k")]
+    K160,
+
+    #[serde(rename = "192k")]
+    K192,
+
+    #[serde(rename = "256k")]
+    K256,
+
+    #[serde(rename = "320k")]
+    K320,
+}
+
+impl AudioBitrate {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::K64 => "64k",
+            Self::K96 => "96k",
+            Self::K128 => "128k",
+            Self::K160 => "160k",
+            Self::K192 => "192k",
+            Self::K256 => "256k",
+            Self::K320 => "320k",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioOptions {
+    /// MP3 / M4A / AAC / WMA / OPUS のビットレート
+    #[serde(default)]
+    pub bitrate: AudioBitrate,
+
+    /// FLAC の圧縮レベル
+    pub flac_compression_level: Option<u32>,
+
+    /// OGG/Vorbis の品質
+    pub vorbis_quality: Option<i32>,
+
+    /// サンプルレート
+    pub sample_rate: Option<u32>,
+
+    /// チャンネル数
+    pub channels: Option<u32>,
+
+    /// WAV / AIFF のPCMビット深度
+    pub pcm_bit_depth: Option<u32>,
+}
+
+impl Default for AudioOptions {
+    fn default() -> Self {
+        Self {
+            bitrate: AudioBitrate::default(),
+            flac_compression_level: Some(5),
+            vorbis_quality: Some(4),
+            sample_rate: Some(48000),
+            channels: Some(2),
+            pcm_bit_depth: Some(16),
+        }
+    }
+}
+
+impl AudioOptions {
+    pub fn validate(&self, output_format: FileFormat) -> Result<(), String> {
+        if !output_format.is_audio() {
+            return Ok(());
+        }
+
+        if let Some(sample_rate) = self.sample_rate {
+            if sample_rate == 0 {
+                return Err("sampleRate は 1 以上で指定してください".into());
+            }
+
+            if !matches!(
+                sample_rate,
+                8000 | 11025
+                    | 16000
+                    | 22050
+                    | 32000
+                    | 44100
+                    | 48000
+                    | 88200
+                    | 96000
+                    | 176400
+                    | 192000
+            ) {
+                return Err("sampleRate は対応しているサンプルレートを指定してください".into());
+            }
+        }
+
+        if let Some(channels) = self.channels {
+            if !(1..=2).contains(&channels) {
+                return Err("channels は 1〜2 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(bit_depth) = self.pcm_bit_depth {
+            if !matches!(bit_depth, 16 | 24 | 32) {
+                return Err("pcmBitDepth は 16 / 24 / 32 のいずれかを指定してください".into());
+            }
+        }
+
+        if let Some(level) = self.flac_compression_level {
+            if level > 12 {
+                return Err("flacCompressionLevel は 0〜12 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(quality) = self.vorbis_quality {
+            if !(-1..=10).contains(&quality) {
+                return Err("vorbisQuality は -1〜10 の範囲で指定してください".into());
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -88,14 +235,19 @@ pub struct ConversionOptions {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub compression_level: Option<u32>,
+    #[serde(rename = "qVJpeg")]
     pub q_v_jpeg: Option<u32>,
+    #[serde(rename = "qVWebp")]
     pub q_v_webp: Option<u32>,
     pub fps: Option<u32>,
     pub max_colors: Option<u32>,
+
+    /// 音声変換用オプション
+    pub audio: Option<AudioOptions>,
 }
 
 impl ConversionOptions {
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self, output_format: FileFormat) -> Result<(), String> {
         if let Some(width) = self.width {
             if width == 0 {
                 return Err("幅は 1 以上で指定してください".into());
@@ -137,6 +289,11 @@ impl ConversionOptions {
                 return Err("max_colors は 2〜256 の範囲で指定してください".into());
             }
         }
+
+        if let Some(audio) = &self.audio {
+            audio.validate(output_format)?;
+        }
+
         Ok(())
     }
 }
