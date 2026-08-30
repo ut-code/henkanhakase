@@ -150,10 +150,10 @@ pub struct AudioOptions {
     /// OGG/Vorbis の品質
     pub vorbis_quality: Option<i32>,
 
-    /// サンプルレート
+    /// サンプルレート (None または 0 で自動/元ファイル維持)
     pub sample_rate: Option<u32>,
 
-    /// チャンネル数
+    /// チャンネル数 (None または 0 で自動/元ファイル維持)
     pub channels: Option<u32>,
 
     /// WAV / AIFF のPCMビット深度
@@ -166,8 +166,8 @@ impl Default for AudioOptions {
             bitrate: AudioBitrate::default(),
             flac_compression_level: Some(5),
             vorbis_quality: Some(4),
-            sample_rate: Some(48000),
-            channels: Some(2),
+            sample_rate: None,
+            channels: None,
             pcm_bit_depth: Some(16),
         }
     }
@@ -180,29 +180,29 @@ impl AudioOptions {
         }
 
         if let Some(sample_rate) = self.sample_rate {
-            if sample_rate == 0 {
-                return Err("sampleRate は 1 以上で指定してください".into());
-            }
-
-            if !matches!(
-                sample_rate,
-                8000 | 11025
-                    | 16000
-                    | 22050
-                    | 32000
-                    | 44100
-                    | 48000
-                    | 88200
-                    | 96000
-                    | 176400
-                    | 192000
-            ) {
+            // 0 の場合は「自動 (元ファイルを保持)」として扱うため許可
+            if sample_rate != 0
+                && !matches!(
+                    sample_rate,
+                    8000 | 11025
+                        | 16000
+                        | 22050
+                        | 32000
+                        | 44100
+                        | 48000
+                        | 88200
+                        | 96000
+                        | 176400
+                        | 192000
+                )
+            {
                 return Err("sampleRate は対応しているサンプルレートを指定してください".into());
             }
         }
 
         if let Some(channels) = self.channels {
-            if !(1..=2).contains(&channels) {
+            // 0 の場合は「自動 (元ファイルを保持)」として扱うため許可
+            if channels != 0 && !(1..=2).contains(&channels) {
                 return Err("channels は 1〜2 の範囲で指定してください".into());
             }
         }

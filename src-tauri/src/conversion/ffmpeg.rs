@@ -213,11 +213,15 @@ fn build_audio_args(
 /// サンプルレート・チャンネル設定
 fn append_audio_common_options(args: &mut Vec<String>, options: &super::types::AudioOptions) {
     if let Some(sample_rate) = options.sample_rate {
-        args.extend(["-ar".into(), sample_rate.to_string()]);
+        if sample_rate > 0 {
+            args.extend(["-ar".into(), sample_rate.to_string()]);
+        }
     }
 
     if let Some(channels) = options.channels {
-        args.extend(["-ac".into(), channels.to_string()]);
+        if channels > 0 {
+            args.extend(["-ac".into(), channels.to_string()]);
+        }
     }
 }
 
