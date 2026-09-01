@@ -94,6 +94,7 @@ pub struct ConversionOptions {
     pub max_colors: Option<u32>,
     pub crf: Option<u32>,
     pub crf_vp9: Option<u32>,
+    pub q_v_avi: Option<u32>,
 }
 
 impl ConversionOptions {
@@ -149,6 +150,12 @@ impl ConversionOptions {
         if let Some(crf_vp9) = self.crf_vp9 {
             if !(0..=63).contains(&crf_vp9) {
                 return Err("crf は 0〜63 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(q_v_avi) = self.q_v_avi {
+            if !(1..=31).contains(&q_v_avi) {
+                return Err("q:v は 1〜31 の範囲で指定してください".into());
             }
         }
         Ok(())

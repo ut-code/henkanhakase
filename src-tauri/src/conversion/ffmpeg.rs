@@ -78,6 +78,12 @@ fn build_default_args(
                 }
             }
 
+            FileFormat::Avi => {
+                if let Some(q_v_avi) = options.q_v_avi {
+                    args.extend(["-q:v".into(), q_v_avi.to_string()]);
+                }
+            }
+
             _ => {}
         }
     }
@@ -185,7 +191,9 @@ fn append_video_output_options(args: &mut Vec<String>, format: FileFormat) {
             ]);
         }
 
-        FileFormat::Avi => {}
+        FileFormat::Avi => {
+            args.extend(["-c:v".into(), "mpeg4".into()]);
+        }
 
         _ => {}
     }

@@ -122,6 +122,7 @@ function App() {
   const [gifMaxColors, setGifMaxColors] = useState<number>(256);
   const [videoCrf, setVideoCrf] = useState<number>(23);
   const [webmCrf, setWebmCrf] = useState<number>(31);
+  const [aviQV, setAviQV] = useState<number>(3);
 
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -208,6 +209,7 @@ function App() {
                     ? videoCrf
                     : undefined,
                 crfVp9: convertedFormat === "WebM" ? webmCrf : undefined,
+                qVAvi: convertedFormat === "AVI" ? aviQV : undefined,
               }
             : undefined,
         },
@@ -705,7 +707,8 @@ function App() {
             (IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ||
               convertedFormat === "MP4" ||
               convertedFormat === "WebM" ||
-              convertedFormat === "MOV") ? (
+              convertedFormat === "MOV" ||
+              convertedFormat === "AVI") ? (
               <div className="flex flex-wrap items-center gap-6">
                 {convertedFormat === "PNG" && (
                   <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
@@ -919,6 +922,36 @@ function App() {
                     <div className="flex justify-between text-[10px] text-[#9aa6b7]">
                       <span>0 (高品質)</span>
                       <span>63 (低品質)</span>
+                    </div>
+                  </div>
+                )}
+                {convertedFormat === "AVI" && (
+                  <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label
+                        htmlFor="avi-qv"
+                        className="font-semibold text-[#415166]"
+                      >
+                        圧縮レベル(非可逆圧縮)
+                      </label>
+                      <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                        {aviQV}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      id="avi-qv"
+                      min="1"
+                      max="31"
+                      value={aviQV}
+                      onChange={(e) =>
+                        setAviQV(Number.parseInt(e.target.value, 10))
+                      }
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+                    />
+                    <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+                      <span>1 (高品質)</span>
+                      <span>31 (低品質)</span>
                     </div>
                   </div>
                 )}
