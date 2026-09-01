@@ -10,8 +10,6 @@ pub fn build_args(
     options: &ConversionOptions,
 ) -> Result<Vec<String>, String> {
     options.validate(output_format)?;
-
-    // 動画 / GIF → GIF
     if (input_format.is_video() || input_format == FileFormat::Gif)
         && output_format == FileFormat::Gif
     {
@@ -44,12 +42,18 @@ pub fn build_args(
     }
 
     // 既存の変換はこれまでと同様 FFmpeg に任せる
-    Ok(build_default_args(input_path, output_path, options))
+    Ok(build_default_args(
+        input_path,
+        output_path,
+        output_format,
+        options,
+    ))
 }
 
 fn build_default_args(
     input_path: &Path,
     output_path: &Path,
+    output_format: FileFormat,
     options: &ConversionOptions,
 ) -> Vec<String> {
     let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
@@ -64,6 +68,37 @@ fn build_default_args(
 
     if let Some(q_v_webp) = options.q_v_webp {
         args.extend(["-q:v".into(), q_v_webp.to_string()]);
+    }
+
+    if output_format.is_video() {
+        append_video_output_options(&mut args, output_format);
+
+        match output_format {
+            FileFormat::Mp4 | FileFormat::Mov => {
+                if let Some(crf) = options.crf {
+                    args.extend(["-crf".into(), crf.to_string()]);
+                }
+            }
+
+            FileFormat::Webm => {
+                if let Some(crf_vp9) = options.crf_vp9 {
+                    args.extend([
+                        "-crf".into(),
+                        crf_vp9.to_string(),
+                        "-b:v".into(),
+                        "0".into(),
+                    ]);
+                }
+            }
+
+            FileFormat::Avi => {
+                if let Some(q_v_avi) = options.q_v_avi {
+                    args.extend(["-q:v".into(), q_v_avi.to_string()]);
+                }
+            }
+
+            _ => {}
+        }
     }
 
     args.push(path_to_string(output_path));
@@ -354,7 +389,9 @@ fn append_video_output_options(args: &mut Vec<String>, format: FileFormat) {
             ]);
         }
 
-        FileFormat::Avi => {}
+        FileFormat::Avi => {
+            args.extend(["-c:v".into(), "mpeg4".into()]);
+        }
 
         _ => {}
     }

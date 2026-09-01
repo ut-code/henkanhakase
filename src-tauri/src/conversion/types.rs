@@ -240,6 +240,9 @@ pub struct ConversionOptions {
     pub q_v_webp: Option<u32>,
     pub fps: Option<u32>,
     pub max_colors: Option<u32>,
+    pub crf: Option<u32>,
+    pub crf_vp9: Option<u32>,
+    pub q_v_avi: Option<u32>,
 
     /// 音声変換用オプション
     pub audio: Option<AudioOptions>,
@@ -289,10 +292,27 @@ impl ConversionOptions {
             }
         }
 
+        if let Some(crf) = self.crf {
+            if !(0..=51).contains(&crf) {
+                return Err("crf は 0〜51 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(crf_vp9) = self.crf_vp9 {
+            if !(0..=63).contains(&crf_vp9) {
+                return Err("crf は 0〜63 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(q_v_avi) = self.q_v_avi {
+            if !(1..=31).contains(&q_v_avi) {
+                return Err("q:v は 1〜31 の範囲で指定してください".into());
+            }
+        }
+
         if let Some(audio) = &self.audio {
             audio.validate(output_format)?;
         }
-
         Ok(())
     }
 }
