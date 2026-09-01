@@ -120,6 +120,8 @@ function App() {
   const [webpQV, setWebpQV] = useState<number>(75);
   const [gifFPS, setGifFPS] = useState<number>(15);
   const [gifMaxColors, setGifMaxColors] = useState<number>(256);
+  const [videoCrf, setVideoCrf] = useState<number>(23);
+  const [webmCrf, setWebmCrf] = useState<number>(31);
 
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -201,6 +203,11 @@ function App() {
                 qVWebp: convertedFormat === "WebP" ? webpQV : undefined,
                 fps: convertedFormat === "GIF" ? gifFPS : undefined,
                 maxColors: convertedFormat === "GIF" ? gifMaxColors : undefined,
+                crf:
+                  convertedFormat === "MP4" || convertedFormat === "MOV"
+                    ? videoCrf
+                    : undefined,
+                crfVp9: convertedFormat === "WebM" ? webmCrf : undefined,
               }
             : undefined,
         },
@@ -695,7 +702,10 @@ function App() {
         {detailsOpen && (
           <div className="border-t border-[#edf0f5] px-5.5 py-4">
             {sourceFile &&
-            IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ? (
+            (IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ||
+              convertedFormat === "MP4" ||
+              convertedFormat === "WebM" ||
+              convertedFormat === "MOV") ? (
               <div className="flex flex-wrap items-center gap-6">
                 {convertedFormat === "PNG" && (
                   <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
@@ -851,6 +861,66 @@ function App() {
                       </div>
                     </div>
                   </>
+                )}
+                {(convertedFormat === "MP4" || convertedFormat === "MOV") && (
+                  <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label
+                        htmlFor="video-crf"
+                        className="font-semibold text-[#415166]"
+                      >
+                        圧縮レベル(CRF)
+                      </label>
+                      <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                        {videoCrf}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      id="video-crf"
+                      min="0"
+                      max="51"
+                      value={videoCrf}
+                      onChange={(e) =>
+                        setVideoCrf(Number.parseInt(e.target.value, 10))
+                      }
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+                    />
+                    <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+                      <span>0 (高品質)</span>
+                      <span>51 (低品質)</span>
+                    </div>
+                  </div>
+                )}
+                {convertedFormat === "WebM" && (
+                  <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label
+                        htmlFor="webm-crf"
+                        className="font-semibold text-[#415166]"
+                      >
+                        圧縮レベル(CRF)
+                      </label>
+                      <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                        {webmCrf}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      id="webm-crf"
+                      min="0"
+                      max="63"
+                      value={webmCrf}
+                      onChange={(e) =>
+                        setWebmCrf(Number.parseInt(e.target.value, 10))
+                      }
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+                    />
+                    <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+                      <span>0 (高品質)</span>
+                      <span>63 (低品質)</span>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (

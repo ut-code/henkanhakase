@@ -92,6 +92,8 @@ pub struct ConversionOptions {
     pub q_v_webp: Option<u32>,
     pub fps: Option<u32>,
     pub max_colors: Option<u32>,
+    pub crf: Option<u32>,
+    pub crf_vp9: Option<u32>,
 }
 
 impl ConversionOptions {
@@ -135,6 +137,18 @@ impl ConversionOptions {
         if let Some(max_colors) = self.max_colors {
             if !(2..=256).contains(&max_colors) {
                 return Err("max_colors は 2〜256 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(crf) = self.crf {
+            if !(0..=51).contains(&crf) {
+                return Err("crf は 0〜51 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(crf_vp9) = self.crf_vp9 {
+            if !(0..=63).contains(&crf_vp9) {
+                return Err("crf は 0〜63 の範囲で指定してください".into());
             }
         }
         Ok(())
