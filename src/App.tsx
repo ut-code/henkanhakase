@@ -133,7 +133,7 @@ function App() {
     }
 
     if (VIDEO_FORMATS.includes(sourceFormat as VideoFormat)) {
-      return [...VIDEO_FORMATS, "GIF"];
+      return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
     }
 
     if (AUDIO_FORMATS.includes(sourceFormat as AudioFormat)) {
