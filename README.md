@@ -16,6 +16,7 @@
 | `dist`                      | ビルド成果物の出力先ディレクトリ。`npm run build`で生成される |
 | `node_modules`              | npmの依存パッケージ。`npm install`で生成される                |
 | `public`                    | ビルド後にルートに置かれる。画像など                          |
+| `src/assets`              | 画像など。importして使える                                            |
 | `src/App.css`               | スタイルシート                                                |
 | `src/App.tsx`               | フロントエンドの本体                                          |
 | `src-tauri/binaries`        | FFmpegのバイナリファイル。sidecarで使用されている             |

@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { useMemo, useRef, useState } from "react";
+import FileIcon from "./assets/file.svg";
+import UploadIcon from "./assets/upload.svg";
 
 const IMAGE_FORMATS = ["PNG", "JPEG", "WebP", "GIF"] as const;
 const VIDEO_FORMATS = ["MP4", "WebM", "AVI", "MOV"] as const;
@@ -69,35 +71,6 @@ const mimeTypes: Record<Format, string[]> = {
   OGG: ["audio/ogg", "application/ogg"],
   OPUS: ["audio/opus"],
 };
-
-function UploadIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="size-6 fill-none stroke-current stroke-[1.7] stroke-linecap-round stroke-linejoin-round"
-    >
-      <path d="M12 16V4" />
-      <path d="m7 9 5-5 5 5" />
-      <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
-    </svg>
-  );
-}
-
-function FileIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="size-6 fill-none stroke-current stroke-[1.7] stroke-linecap-round stroke-linejoin-round"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6" />
-      <path d="M8 13h8" />
-      <path d="M8 17h6" />
-    </svg>
-  );
-}
 
 function formatToExtension(format: Format): string {
   switch (format) {
@@ -698,7 +671,7 @@ function App() {
                 text-[#6276f7]
               "
             >
-              <UploadIcon />
+              <img src={UploadIcon} alt="Upload" />
             </span>
 
             <strong
@@ -902,7 +875,7 @@ function App() {
                 text-[#a9b4c4]
               "
             >
-              <FileIcon />
+              <img src={FileIcon} alt="File" />
             </span>
 
             <strong
