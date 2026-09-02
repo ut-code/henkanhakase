@@ -16,11 +16,16 @@
 | `dist`                      | ビルド成果物の出力先ディレクトリ。`npm run build`で生成される |
 | `node_modules`              | npmの依存パッケージ。`npm install`で生成される                |
 | `public`                    | ビルド後にルートに置かれる。画像など                          |
+| `src/assets`              | 画像など。importして使える                                            |
+| `src/components`            | Reactのコンポーネント                                          |
 | `src/App.css`               | スタイルシート                                                |
 | `src/App.tsx`               | フロントエンドの本体                                          |
 | `src-tauri/binaries`        | FFmpegのバイナリファイル。sidecarで使用されている             |
 | `src-tauri/icons`           | アプリケーションアイコン                                      |
-| `src-tauri/src/lib.rs`      | 変換処理のロジック                                            |
+| `src-tauri/src/conversion/ffmpeg.rs` | FFmpegのコマンドの組み立て                                        |
+| `src-tauri/src/conversion/mod.rs`    | 変換処理のモジュール                                          |
+| `src-tauri/src/conversion/types.rs`  | 変換処理の型定義                                              |
+| `src-tauri/src/lib.rs`      | 変換処理の呼び出し                                            |
 | `src-tauri/.gitignore`      | Gitで管理しないファイルの設定(バックエンド)                   |
 | `src-tauri/tauri.conf.json` | Tauriの設定ファイル                                           |
 | `src-tauri/Cargo.toml`      | Rustの設定ファイル                                            |
