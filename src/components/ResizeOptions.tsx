@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { MediaDimensions } from "../formats";
 
 type ResizeOptionsProps = {
@@ -28,6 +29,26 @@ export function ResizeOptions({
   onHeightChange,
 }: ResizeOptionsProps) {
   const unavailable = isLoading || !dimensions;
+  const [widthInput, setWidthInput] = useState(String(width));
+  const [heightInput, setHeightInput] = useState(String(height));
+
+  useEffect(() => {
+    setWidthInput(String(width));
+  }, [width]);
+
+  useEffect(() => {
+    setHeightInput(String(height));
+  }, [height]);
+
+  const commitWidth = () => {
+    onWidthChange(Number(widthInput));
+    setWidthInput(String(width));
+  };
+
+  const commitHeight = () => {
+    onHeightChange(Number(heightInput));
+    setHeightInput(String(height));
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -62,8 +83,12 @@ export function ResizeOptions({
               type="number"
               min={1}
               max={16384}
-              value={width}
-              onChange={(event) => onWidthChange(Number(event.target.value))}
+              value={widthInput}
+              onChange={(event) => setWidthInput(event.target.value)}
+              onBlur={commitWidth}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
               className="rounded-[9px] border border-[#dfe5ef] bg-white px-3 py-2 text-xs font-normal text-[#40506a] outline-[#6578f7]"
             />
           </label>
@@ -76,8 +101,12 @@ export function ResizeOptions({
               type="number"
               min={1}
               max={16384}
-              value={height}
-              onChange={(event) => onHeightChange(Number(event.target.value))}
+              value={heightInput}
+              onChange={(event) => setHeightInput(event.target.value)}
+              onBlur={commitHeight}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
               className="rounded-[9px] border border-[#dfe5ef] bg-white px-3 py-2 text-xs font-normal text-[#40506a] outline-[#6578f7]"
             />
           </label>

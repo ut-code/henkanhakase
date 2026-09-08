@@ -319,7 +319,7 @@ fn build_gif_to_video_args(
         // H.264 等で奇数サイズが問題になることがあるため、元寸法も偶数化する
         args.extend([
             "-vf".into(),
-            "scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos".into(),
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,setsar=1".into(),
         ]);
     }
 
@@ -394,7 +394,7 @@ fn build_scale_filter(
     height: Option<u32>,
     require_even: bool,
 ) -> Option<String> {
-    match (width, height) {
+    let scale = match (width, height) {
         (Some(width), Some(height)) => {
             let width = normalize_dimension(width, require_even);
             let height = normalize_dimension(height, require_even);
@@ -414,7 +414,10 @@ fn build_scale_filter(
         }
 
         (None, None) => None,
-    }
+    }?;
+
+    // 指定したピクセル寸法がそのまま表示寸法になるよう、入力のSARを引き継がない
+    Some(format!("{scale},setsar=1"))
 }
 
 fn normalize_dimension(value: u32, require_even: bool) -> u32 {
