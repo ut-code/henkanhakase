@@ -30,10 +30,8 @@ pub fn build_args(
         ));
     }
 
-    if input_format.is_video()
-        && output_format.is_audio()
-    {
-        return Ok(build_video_to_audio_args(input_path, output_path, options));
+    if input_format.is_video() && output_format.is_audio() {
+        return Ok(build_video_to_audio_args(input_path, output_path));
     }
 
     // 音声変換
@@ -57,6 +55,11 @@ fn build_default_args(
     options: &ConversionOptions,
 ) -> Vec<String> {
     let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
+
+    if let Some(scale) = build_scale_filter(options.width, options.height, output_format.is_video())
+    {
+        args.extend(["-vf".into(), scale]);
+    }
 
     if let Some(compression_level) = options.compression_level {
         args.extend(["-compression_level".into(), compression_level.to_string()]);
@@ -277,10 +280,11 @@ fn build_video_or_gif_to_gif_args(
 ) -> Vec<String> {
     let fps = options.fps.unwrap_or(15);
 
-    let scale = build_scale_filter(options.width, options.height);
+    let scale = build_scale_filter(options.width, options.height, false)
+        .unwrap_or_else(|| "scale=iw:ih:flags=lanczos".into());
 
     let filter = format!(
-        "fps={fps},{scale}:flags=lanczos,\
+        "fps={fps},{scale},\
 split[s0][s1];\
 [s0]palettegen=max_colors={max_colors}:reserve_transparent=0[p];\
 [s1][p]paletteuse",
@@ -309,27 +313,15 @@ fn build_gif_to_video_args(
 ) -> Vec<String> {
     let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
 
-    let scale = match (options.width, options.height) {
-        (Some(width), Some(height)) => {
-            format!("scale={}:{}", make_even(width), make_even(height))
-        }
-
-        (Some(width), None) => {
-            format!("scale={}:trunc(ow/a/2)*2", make_even(width))
-        }
-
-        (None, Some(height)) => {
-            format!("scale=trunc(oh*a/2)*2:{}", make_even(height))
-        }
-
-        (None, None) => {
-            // H.264 等で奇数サイズが問題になることがあるため偶数化
-            "scale=trunc(iw/2)*2:trunc(ih/2)*2".into()
-        }
-    };
-
-    args.push("-vf".into());
-    args.push(scale);
+    if let Some(scale) = build_scale_filter(options.width, options.height, true) {
+        args.extend(["-vf".into(), scale]);
+    } else {
+        // H.264 等で奇数サイズが問題になることがあるため、元寸法も偶数化する
+        args.extend([
+            "-vf".into(),
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos".into(),
+        ]);
+    }
 
     if let Some(fps) = options.fps {
         args.push("-r".into());
@@ -343,11 +335,7 @@ fn build_gif_to_video_args(
     args
 }
 
-fn build_video_to_audio_args(
-    input_path: &Path,
-    output_path: &Path,
-    options: &ConversionOptions, // 現時点では不使用だが、将来的にオーディオ変換オプションを追加するため引数として受け取る
-) -> Vec<String> {
+fn build_video_to_audio_args(input_path: &Path, output_path: &Path) -> Vec<String> {
     let mut args = vec![
         "-y".into(),
         "-i".into(),
@@ -401,29 +389,39 @@ fn append_video_output_options(args: &mut Vec<String>, format: FileFormat) {
 // Utility
 // ============================================================
 
-fn build_scale_filter(width: Option<u32>, height: Option<u32>) -> String {
+fn build_scale_filter(
+    width: Option<u32>,
+    height: Option<u32>,
+    require_even: bool,
+) -> Option<String> {
     match (width, height) {
         (Some(width), Some(height)) => {
-            format!("scale={width}:{height}")
+            let width = normalize_dimension(width, require_even);
+            let height = normalize_dimension(height, require_even);
+            Some(format!("scale={width}:{height}:flags=lanczos"))
         }
 
         (Some(width), None) => {
-            format!("scale={width}:-1")
+            let width = normalize_dimension(width, require_even);
+            let height = if require_even { -2 } else { -1 };
+            Some(format!("scale={width}:{height}:flags=lanczos"))
         }
 
         (None, Some(height)) => {
-            format!("scale=-1:{height}")
+            let width = if require_even { -2 } else { -1 };
+            let height = normalize_dimension(height, require_even);
+            Some(format!("scale={width}:{height}:flags=lanczos"))
         }
 
-        (None, None) => "scale=iw:ih".into(),
+        (None, None) => None,
     }
 }
 
-fn make_even(value: u32) -> u32 {
-    if value.is_multiple_of(2) {
+fn normalize_dimension(value: u32, require_even: bool) -> u32 {
+    if !require_even || value.is_multiple_of(2) {
         value
     } else {
-        value - 1
+        (value + 1).min(16384)
     }
 }
 

@@ -21,6 +21,11 @@ export type VideoFormat = (typeof VIDEO_FORMATS)[number];
 export type AudioFormat = (typeof AUDIO_FORMATS)[number];
 export type Format = ImageFormat | VideoFormat | AudioFormat;
 
+export type MediaDimensions = {
+  width: number;
+  height: number;
+};
+
 export type AudioBitrate =
   | "64k"
   | "96k"

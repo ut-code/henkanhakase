@@ -15,6 +15,7 @@ import {
   type AudioFormat,
   type Format,
   type AudioCompressionOptions,
+  type MediaDimensions,
   mimeTypes,
   formatToExtension,
   isAudioFormat,
@@ -22,6 +23,20 @@ import {
 import { AudioOptions } from "./components/AudioOptions";
 import { ImageOptions } from "./components/ImageOptions";
 import { VideoOptions } from "./components/VideoOptions";
+import { ResizeOptions } from "./components/ResizeOptions";
+
+const MAX_DIMENSION = 16384;
+
+function clampDimension(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(MAX_DIMENSION, Math.max(1, Math.round(value)));
+}
+
+function normalizeVideoDimension(value: number): number {
+  const clamped = clampDimension(value);
+  if (clamped % 2 === 0) return clamped;
+  return Math.min(MAX_DIMENSION, clamped + 1);
+}
 
 function App() {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
@@ -39,6 +54,17 @@ function App() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mediaDimensions, setMediaDimensions] =
+    useState<MediaDimensions | null>(null);
+  const [isProbingDimensions, setIsProbingDimensions] = useState(false);
+  const [dimensionProbeError, setDimensionProbeError] = useState<string | null>(
+    null,
+  );
+  const [resizeEnabled, setResizeEnabled] = useState(false);
+  const [aspectRatioLocked, setAspectRatioLocked] = useState(true);
+  const [resizeWidth, setResizeWidth] = useState(1);
+  const [resizeHeight, setResizeHeight] = useState(1);
+  const dimensionProbeId = useRef(0);
 
   const [pngCompressionLevel, setPngCompressionLevel] = useState<number>(9);
   const [jpegQV, setJpegQV] = useState<number>(3);
@@ -61,6 +87,10 @@ function App() {
 
   const fileInput = useRef<HTMLInputElement>(null);
 
+  const isVideoOutput = VIDEO_FORMATS.includes(
+    convertedFormat as VideoFormat,
+  );
+
   const availableOutputFormats = useMemo<Format[]>(() => {
     if (!sourceFormat) {
       return [];
@@ -81,7 +111,7 @@ function App() {
     return [...IMAGE_FORMATS];
   }, [sourceFormat]);
 
-  const selectFile = (file?: File) => {
+  const selectFile = async (file?: File) => {
     if (!file) return;
 
     const detectedFormat = Object.keys(mimeTypes).find((format) =>
@@ -98,6 +128,12 @@ function App() {
     setSourceFile(file);
     setConvertedFile(null);
     setError(null);
+    setMediaDimensions(null);
+    setDimensionProbeError(null);
+    setResizeEnabled(false);
+    setAspectRatioLocked(true);
+
+    const probeId = ++dimensionProbeId.current;
 
     if (detectedFormat === "GIF") {
       setConvertedFormat("MP4");
@@ -108,41 +144,88 @@ function App() {
     } else {
       setConvertedFormat("PNG");
     }
+
+    if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
+      setIsProbingDimensions(false);
+      return;
+    }
+
+    setIsProbingDimensions(true);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const dimensions = await invoke<MediaDimensions>(
+        "probe_media_dimensions",
+        {
+          request: {
+            data: Array.from(new Uint8Array(buffer)),
+            inputFormat: formatToExtension(detectedFormat),
+          },
+        },
+      );
+
+      if (probeId !== dimensionProbeId.current) return;
+
+      setMediaDimensions(dimensions);
+      setResizeWidth(clampDimension(dimensions.width));
+      setResizeHeight(clampDimension(dimensions.height));
+    } catch (probeError) {
+      if (probeId !== dimensionProbeId.current) return;
+      setDimensionProbeError(
+        `サイズの取得に失敗しました: ${String(probeError)}`,
+      );
+    } finally {
+      if (probeId === dimensionProbeId.current) {
+        setIsProbingDimensions(false);
+      }
+    }
   };
 
   const buildConversionOptions = () => {
+    const resizeOptions =
+      resizeEnabled && !isAudioFormat(convertedFormat)
+        ? { width: resizeWidth, height: resizeHeight }
+        : {};
+
     if (!detailsOpen) {
-      return undefined;
+      return resizeEnabled ? resizeOptions : undefined;
     }
     switch (convertedFormat) {
       case "PNG":
         return {
+          ...resizeOptions,
           compressionLevel: pngCompressionLevel,
         };
       case "JPEG":
         return {
+          ...resizeOptions,
           qVJpeg: jpegQV,
         };
       case "WebP":
         return {
+          ...resizeOptions,
           qVWebp: webpQV,
         };
       case "GIF":
         return {
+          ...resizeOptions,
           fps: gifFPS,
           maxColors: gifMaxColors,
         };
       case "MP4":
       case "MOV":
         return {
+          ...resizeOptions,
           crf: videoCrf,
         };
       case "WebM":
         return {
+          ...resizeOptions,
           crfVp9: webmCrf,
         };
       case "AVI":
         return {
+          ...resizeOptions,
           qVAvi: aviQV,
         };
       default:
@@ -270,6 +353,87 @@ function App() {
   const handleFormatChange = (newFormat: Format) => {
     setConvertedFormat(newFormat);
     setConvertedFile(null);
+
+    if (resizeEnabled && VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
+      setResizeWidth(normalizeVideoDimension(resizeWidth));
+      setResizeHeight(normalizeVideoDimension(resizeHeight));
+    }
+  };
+
+  const normalizeOutputDimensions = (width: number, height: number) => {
+    if (isVideoOutput) {
+      return {
+        width: normalizeVideoDimension(width),
+        height: normalizeVideoDimension(height),
+      };
+    }
+
+    return {
+      width: clampDimension(width),
+      height: clampDimension(height),
+    };
+  };
+
+  const updateLockedDimensions = (value: number, axis: "width" | "height") => {
+    if (!mediaDimensions) return;
+
+    const ratio = mediaDimensions.width / mediaDimensions.height;
+    let width = axis === "width" ? clampDimension(value) : resizeWidth;
+    let height = axis === "height" ? clampDimension(value) : resizeHeight;
+
+    if (axis === "width") {
+      height = Math.round(width / ratio);
+      if (height > MAX_DIMENSION) {
+        height = MAX_DIMENSION;
+        width = Math.round(height * ratio);
+      }
+    } else {
+      width = Math.round(height * ratio);
+      if (width > MAX_DIMENSION) {
+        width = MAX_DIMENSION;
+        height = Math.round(width / ratio);
+      }
+    }
+
+    const normalized = normalizeOutputDimensions(width, height);
+    setResizeWidth(normalized.width);
+    setResizeHeight(normalized.height);
+  };
+
+  const handleResizeWidthChange = (value: number) => {
+    if (aspectRatioLocked) {
+      updateLockedDimensions(value, "width");
+      return;
+    }
+    setResizeWidth(
+      isVideoOutput
+        ? normalizeVideoDimension(value)
+        : clampDimension(value),
+    );
+  };
+
+  const handleResizeHeightChange = (value: number) => {
+    if (aspectRatioLocked) {
+      updateLockedDimensions(value, "height");
+      return;
+    }
+    setResizeHeight(
+      isVideoOutput
+        ? normalizeVideoDimension(value)
+        : clampDimension(value),
+    );
+  };
+
+  const handleResizeEnabledChange = (enabled: boolean) => {
+    setResizeEnabled(enabled);
+    if (!enabled || !mediaDimensions) return;
+
+    const normalized = normalizeOutputDimensions(
+      mediaDimensions.width,
+      mediaDimensions.height,
+    );
+    setResizeWidth(normalized.width);
+    setResizeHeight(normalized.height);
   };
 
   const handleDrop = (event: React.DragEvent<HTMLButtonElement>) => {
@@ -696,32 +860,51 @@ function App() {
 
         {detailsOpen && (
           <div className="border-t border-[#edf0f5] px-5.5 py-4">
-            {sourceFile &&
-            IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ? (
-              <ImageOptions
-                format={convertedFormat as ImageFormat}
-                sourceFormat={sourceFormat}
-                pngCompressionLevel={pngCompressionLevel}
-                onPngCompressionLevelChange={setPngCompressionLevel}
-                jpegQV={jpegQV}
-                onJpegQVChange={setJpegQV}
-                webpQV={webpQV}
-                onWebpQVChange={setWebpQV}
-                gifFPS={gifFPS}
-                onGifFPSChange={setGifFPS}
-                gifMaxColors={gifMaxColors}
-                onGifMaxColorsChange={setGifMaxColors}
-              />
-            ) : VIDEO_FORMATS.includes(convertedFormat as VideoFormat) ? (
-              <VideoOptions
-                format={convertedFormat as VideoFormat}
-                videoCrf={videoCrf}
-                onVideoCrfChange={setVideoCrf}
-                webmCrf={webmCrf}
-                onWebmCrfChange={setWebmCrf}
-                aviQV={aviQV}
-                onAviQVChange={setAviQV}
-              />
+            {sourceFile && !isAudioFormat(convertedFormat) ? (
+              <div className="flex flex-col gap-5">
+                <ResizeOptions
+                  dimensions={mediaDimensions}
+                  enabled={resizeEnabled}
+                  aspectRatioLocked={aspectRatioLocked}
+                  width={resizeWidth}
+                  height={resizeHeight}
+                  isLoading={isProbingDimensions}
+                  error={dimensionProbeError}
+                  onEnabledChange={handleResizeEnabledChange}
+                  onAspectRatioLockedChange={setAspectRatioLocked}
+                  onWidthChange={handleResizeWidthChange}
+                  onHeightChange={handleResizeHeightChange}
+                />
+
+                <div className="h-px w-full bg-[#edf0f5]" />
+
+                {IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ? (
+                  <ImageOptions
+                    format={convertedFormat as ImageFormat}
+                    sourceFormat={sourceFormat}
+                    pngCompressionLevel={pngCompressionLevel}
+                    onPngCompressionLevelChange={setPngCompressionLevel}
+                    jpegQV={jpegQV}
+                    onJpegQVChange={setJpegQV}
+                    webpQV={webpQV}
+                    onWebpQVChange={setWebpQV}
+                    gifFPS={gifFPS}
+                    onGifFPSChange={setGifFPS}
+                    gifMaxColors={gifMaxColors}
+                    onGifMaxColorsChange={setGifMaxColors}
+                  />
+                ) : (
+                  <VideoOptions
+                    format={convertedFormat as VideoFormat}
+                    videoCrf={videoCrf}
+                    onVideoCrfChange={setVideoCrf}
+                    webmCrf={webmCrf}
+                    onWebmCrfChange={setWebmCrf}
+                    aviQV={aviQV}
+                    onAviQVChange={setAviQV}
+                  />
+                )}
+              </div>
             ) : isAudioFormat(convertedFormat) ? (
               <AudioOptions
                 format={convertedFormat}
