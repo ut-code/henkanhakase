@@ -31,7 +31,7 @@ pub fn build_args(
     }
 
     if input_format.is_video() && output_format.is_audio() {
-        return Ok(build_video_to_audio_args(input_path, output_path));
+        return Ok(build_video_to_audio_args(input_path, output_path, options));
     }
 
     // 音声変換
@@ -335,7 +335,11 @@ fn build_gif_to_video_args(
     args
 }
 
-fn build_video_to_audio_args(input_path: &Path, output_path: &Path) -> Vec<String> {
+fn build_video_to_audio_args(
+    input_path: &Path,
+    output_path: &Path,
+    _options: &ConversionOptions, // 現時点では不使用だが、将来的にオーディオ変換オプションを追加するため引数として受け取る
+) -> Vec<String> {
     let mut args = vec![
         "-y".into(),
         "-i".into(),
