@@ -4,7 +4,9 @@ mod types;
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
+    sync::atomic::{AtomicBool, Ordering},
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use tauri::AppHandle;
@@ -12,7 +14,11 @@ use tauri_plugin_shell::ShellExt;
 
 pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
 
-pub async fn convert(app: &AppHandle, request: ConversionRequest) -> Result<Vec<u8>, String> {
+pub async fn convert(
+    app: &AppHandle,
+    request: ConversionRequest,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<Vec<u8>, String> {
     let workspace = TempWorkspace::new()?;
 
     let input_path = workspace
@@ -33,19 +39,37 @@ pub async fn convert(app: &AppHandle, request: ConversionRequest) -> Result<Vec<
         &request.options,
     )?;
 
-    let output = app
+    // 1. .output() ではなく .spawn() を使用してプロセスを起動する
+    let (mut rx, child) = app
         .shell()
         .sidecar("ffmpeg")
         .map_err(|e| format!("FFmpeg Sidecar の初期化に失敗しました: {e}"))?
         .args(args)
-        .output()
-        .await
-        .map_err(|e| format!("FFmpeg の実行に失敗しました: {e}"))?;
+        .spawn()
+        .map_err(|e| format!("FFmpeg の起動に失敗しました: {e}"))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    // 2. FFmpeg の実行完了、またはキャンセルフラグの変更を非同期にループ監視する
+    loop {
+        // フロントエンドから cancel_conversion が呼ばれたかをチェック
+        if cancel_flag.load(Ordering::Relaxed) {
+            // FFmpeg プロセスを強制終了する
+            let _ = child.kill();
+            return Err("Conversion cancelled by user".into());
+        }
 
-        return Err(format!("FFmpeg による変換処理に失敗しました: {stderr}"));
+        // FFmpeg からのイベント（出力ログや終了通知）を確認する
+        if let Ok(Some(tauri_plugin_shell::process::CommandEvent::Terminated(payload))) =
+            tokio::time::timeout(Duration::from_millis(100), rx.recv()).await
+        {
+            if payload.code != Some(0) {
+                return Err(format!(
+                    "FFmpeg による変換処理に失敗しました (exit code: {:?})",
+                    payload.code
+                ));
+            }
+            // 正常終了したためループを抜ける
+            break;
+        }
     }
 
     fs::read(&output_path).map_err(|e| format!("出力ファイルの読み込みに失敗しました: {e}"))
