@@ -11,6 +11,7 @@ use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 
 pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
+use types::FileFormat;
 
 pub async fn convert(app: &AppHandle, request: ConversionRequest) -> Result<Vec<u8>, String> {
     let workspace = TempWorkspace::new()?;
@@ -92,6 +93,56 @@ pub async fn probe_dimensions(
         .map_err(|e| format!("サイズ取得結果の読み込みに失敗しました: {e}"))?;
 
     parse_png_dimensions(&probe_data)
+}
+
+pub async fn generate_thumbnail(
+    app: &AppHandle,
+    request: MediaProbeRequest,
+) -> Result<Vec<u8>, String> {
+    let workspace = TempWorkspace::new()?;
+    let input_path = workspace
+        .path()
+        .join(format!("input.{}", request.input_format.extension()));
+    let is_gif = request.input_format == FileFormat::Gif;
+    let thumbnail_path = workspace
+        .path()
+        .join(if is_gif { "thumbnail.png" } else { "thumbnail.jpg" });
+
+    fs::write(&input_path, request.data)
+        .map_err(|e| format!("入力ファイルの作成に失敗しました: {e}"))?;
+
+    let mut args = vec![
+        "-y".to_string(),
+        "-i".to_string(),
+        input_path.to_string_lossy().into_owned(),
+        "-an".to_string(),
+        "-vf".to_string(),
+        "thumbnail=30,scale=iw*sar:ih,setsar=1,scale=640:640:force_original_aspect_ratio=decrease".to_string(),
+        "-frames:v".to_string(),
+        "1".to_string(),
+        "-update".to_string(),
+        "1".to_string(),
+    ];
+    if !is_gif {
+        args.extend(["-q:v".to_string(), "4".to_string()]);
+    }
+    args.push(thumbnail_path.to_string_lossy().into_owned());
+
+    let output = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|e| format!("FFmpeg Sidecar の初期化に失敗しました: {e}"))?
+        .args(args)
+        .output()
+        .await
+        .map_err(|e| format!("サムネイルの生成に失敗しました: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("サムネイルの生成に失敗しました: {stderr}"));
+    }
+
+    fs::read(&thumbnail_path).map_err(|e| format!("サムネイルの読み込みに失敗しました: {e}"))
 }
 
 fn parse_png_dimensions(data: &[u8]) -> Result<MediaDimensions, String> {
