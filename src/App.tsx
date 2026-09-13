@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
 import UploadIcon from "./assets/upload.svg";
@@ -24,6 +25,7 @@ import { AudioOptions } from "./components/AudioOptions";
 import { ImageOptions } from "./components/ImageOptions";
 import { VideoOptions } from "./components/VideoOptions";
 import { ResizeOptions } from "./components/ResizeOptions";
+import { ConversionProgress } from "./components/ConversionProgress";
 import { type Translation, useTranslation } from "./i18n";
 
 const MAX_DIMENSION = 16384;
@@ -85,6 +87,8 @@ function App() {
   const [convertedFormat, setConvertedFormat] = useState<Format>("PNG");
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [isConverting, setIsConverting] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState<number | null>(null);
+  const activeConversionId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mediaDimensions, setMediaDimensions] =
     useState<MediaDimensions | null>(null);
@@ -122,6 +126,14 @@ function App() {
     });
 
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<{ conversionId: string; progress: number | null }>("conversion-progress", (event) => {
+      if (event.payload.conversionId === activeConversionId.current) setConversionProgress(event.payload.progress);
+    }).then((dispose) => { unlisten = dispose; });
+    return () => unlisten?.();
+  }, []);
 
   const isVideoOutput = VIDEO_FORMATS.includes(
     convertedFormat as VideoFormat,
@@ -361,6 +373,9 @@ function App() {
 
     const settingsKeyAtConversion = conversionSettingsKey;
     setIsConverting(true);
+    setConversionProgress(null);
+    const conversionId = crypto.randomUUID();
+    activeConversionId.current = conversionId;
     setError(null);
 
     try {
@@ -377,6 +392,7 @@ function App() {
           stem,
           inputFormat: inputExtension,
           outputFormat: extension,
+          conversionId,
 
           options: buildConversionOptions(),
         },
@@ -402,6 +418,7 @@ function App() {
       setError(apiErrorMessage(error, t));
     } finally {
       setIsConverting(false);
+      activeConversionId.current = null;
     }
   };
 
@@ -816,6 +833,7 @@ function App() {
                   : t("convert")}
             </button>
           )}
+          {isConverting && conversionProgress !== null && <ConversionProgress progress={conversionProgress} />}
         </div>
 
         {/* Output Panel */}

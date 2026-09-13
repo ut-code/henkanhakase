@@ -93,8 +93,8 @@ export function ImageOptions({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-            <span>1 (高品質)</span>
-            <span>31 (低品質)</span>
+            <span>{t("rangeHighQuality", { value: 1 })}</span>
+            <span>{t("rangeLowQuality", { value: 31 })}</span>
           </div>
         </div>
       )}
@@ -123,8 +123,8 @@ export function ImageOptions({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-            <span>1 (低品質)</span>
-            <span>100 (高品質)</span>
+            <span>{t("rangeLowQuality", { value: 1 })}</span>
+            <span>{t("rangeHighQuality", { value: 100 })}</span>
           </div>
         </div>
       )}
@@ -170,7 +170,7 @@ export function ImageOptions({
                 {t("colors")}
               </label>
               <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
-                {gifMaxColors} 色
+                {t("colorCount", { value: gifMaxColors })}
               </span>
             </div>
             <input
@@ -185,8 +185,8 @@ export function ImageOptions({
               className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
             />
             <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-              <span>2 色</span>
-              <span>256 色</span>
+              <span>{t("colorCount", { value: 2 })}</span>
+              <span>{t("colorCount", { value: 256 })}</span>
             </div>
           </div>
         </>

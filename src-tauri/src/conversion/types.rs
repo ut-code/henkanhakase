@@ -337,6 +337,10 @@ impl ConversionOptions {
 #[serde(rename_all = "camelCase")]
 pub struct ConversionRequest {
     pub data: Vec<u8>,
+    #[serde(default)]
+    pub conversion_id: String,
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
     pub input_format: FileFormat,
     pub output_format: FileFormat,
 

@@ -45,8 +45,8 @@ export function VideoOptions({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-            <span>0 (高品質)</span>
-            <span>51 (低品質)</span>
+            <span>{t("rangeHighQuality", { value: 0 })}</span>
+            <span>{t("rangeLowQuality", { value: 51 })}</span>
           </div>
         </div>
       )}
@@ -72,8 +72,8 @@ export function VideoOptions({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-            <span>0 (高品質)</span>
-            <span>63 (低品質)</span>
+            <span>{t("rangeHighQuality", { value: 0 })}</span>
+            <span>{t("rangeLowQuality", { value: 63 })}</span>
           </div>
         </div>
       )}
@@ -97,8 +97,8 @@ export function VideoOptions({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-            <span>1 (高品質)</span>
-            <span>31 (低品質)</span>
+            <span>{t("rangeHighQuality", { value: 1 })}</span>
+            <span>{t("rangeLowQuality", { value: 31 })}</span>
           </div>
         </div>
       )}
