@@ -1,6 +1,6 @@
 mod conversion;
 
-use conversion::{ConversionRequest, MediaDimensions, MediaProbeRequest};
+use conversion::{ApiError, ConversionRequest, MediaDimensions, MediaProbeRequest};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::State;
@@ -15,12 +15,14 @@ async fn convert_file(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: ConversionRequest,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, ApiError> {
     // 変換開始時にキャンセルフラグを「false（未キャンセル）」にリセット
     state.cancel_flag.store(false, Ordering::Relaxed);
 
     // conversion モジュールに cancel_flag (Arc<AtomicBool>) を渡して処理を実行
-    conversion::convert(&app, request, state.cancel_flag.clone()).await
+    conversion::convert(&app, request, state.cancel_flag.clone())
+        .await
+        .map_err(ApiError::from)
 }
 
 #[tauri::command]
@@ -33,8 +35,10 @@ fn cancel_conversion(state: State<'_, AppState>) {
 async fn probe_media_dimensions(
     app: tauri::AppHandle,
     request: MediaProbeRequest,
-) -> Result<MediaDimensions, String> {
-    conversion::probe_dimensions(&app, request).await
+) -> Result<MediaDimensions, ApiError> {
+    conversion::probe_dimensions(&app, request)
+        .await
+        .map_err(ApiError::from)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

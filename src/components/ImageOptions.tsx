@@ -4,6 +4,7 @@ import {
   VIDEO_FORMATS,
   type VideoFormat,
 } from "../formats";
+import { useTranslation } from "../i18n";
 
 export type ImageOptionsProps = {
   format: ImageFormat;
@@ -34,6 +35,7 @@ export function ImageOptions({
   gifMaxColors,
   onGifMaxColorsChange,
 }: ImageOptionsProps) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-wrap items-center gap-6">
       {format === "PNG" && (
@@ -43,7 +45,7 @@ export function ImageOptions({
               htmlFor="png-compression"
               className="font-semibold text-[#415166]"
             >
-              圧縮レベル(可逆圧縮)
+              {t("pngCompression")}
             </label>
             <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
               {pngCompressionLevel}
@@ -61,8 +63,8 @@ export function ImageOptions({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-            <span>0 (低圧縮)</span>
-            <span>9 (高圧縮)</span>
+            <span>{t("lowCompression")}</span>
+            <span>{t("highCompression")}</span>
           </div>
         </div>
       )}
@@ -73,7 +75,7 @@ export function ImageOptions({
               htmlFor="jpeg-quality"
               className="font-semibold text-[#415166]"
             >
-              圧縮レベル(非可逆圧縮)
+              {t("jpegCompression")}
             </label>
             <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
               {jpegQV}
@@ -91,8 +93,8 @@ export function ImageOptions({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-            <span>1 (高品質)</span>
-            <span>31 (低品質)</span>
+            <span>{t("rangeHighQuality", { value: 1 })}</span>
+            <span>{t("rangeLowQuality", { value: 31 })}</span>
           </div>
         </div>
       )}
@@ -103,7 +105,7 @@ export function ImageOptions({
               htmlFor="webp-quality"
               className="font-semibold text-[#415166]"
             >
-              品質(非可逆圧縮)
+              {t("webpQuality")}
             </label>
             <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
               {webpQV}
@@ -121,8 +123,8 @@ export function ImageOptions({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-            <span>1 (低品質)</span>
-            <span>100 (高品質)</span>
+            <span>{t("rangeLowQuality", { value: 1 })}</span>
+            <span>{t("rangeHighQuality", { value: 100 })}</span>
           </div>
         </div>
       )}
@@ -165,10 +167,10 @@ export function ImageOptions({
                 htmlFor="gif-max-colors"
                 className="font-semibold text-[#415166]"
               >
-                色数
+                {t("colors")}
               </label>
               <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
-                {gifMaxColors} 色
+                {t("colorCount", { value: gifMaxColors })}
               </span>
             </div>
             <input
@@ -183,8 +185,8 @@ export function ImageOptions({
               className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
             />
             <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-              <span>2 色</span>
-              <span>256 色</span>
+              <span>{t("colorCount", { value: 2 })}</span>
+              <span>{t("colorCount", { value: 256 })}</span>
             </div>
           </div>
         </>
