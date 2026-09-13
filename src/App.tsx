@@ -41,6 +41,11 @@ function normalizeVideoDimension(value: number): number {
 function App() {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [convertedFile, setConvertedFile] = useState<File | null>(null);
+  const [convertedFileFormat, setConvertedFileFormat] =
+    useState<Format | null>(null);
+  const [convertedSettingsKey, setConvertedSettingsKey] = useState<
+    string | null
+  >(null);
   const sourceFormat = useMemo<Format | null>(
     () =>
       sourceFile
@@ -51,7 +56,7 @@ function App() {
     [sourceFile],
   );
   const [convertedFormat, setConvertedFormat] = useState<Format>("PNG");
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const [isConverting, setIsConverting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mediaDimensions, setMediaDimensions] =
@@ -60,11 +65,12 @@ function App() {
   const [dimensionProbeError, setDimensionProbeError] = useState<string | null>(
     null,
   );
-  const [resizeEnabled, setResizeEnabled] = useState(false);
   const [aspectRatioLocked, setAspectRatioLocked] = useState(true);
   const [resizeWidth, setResizeWidth] = useState(1);
   const [resizeHeight, setResizeHeight] = useState(1);
+  const [antiAliasing, setAntiAliasing] = useState(true);
   const dimensionProbeId = useRef(0);
+  const sameFormatConversionSequence = useRef(0);
 
   const [pngCompressionLevel, setPngCompressionLevel] = useState<number>(9);
   const [jpegQV, setJpegQV] = useState<number>(3);
@@ -90,6 +96,30 @@ function App() {
   const isVideoOutput = VIDEO_FORMATS.includes(
     convertedFormat as VideoFormat,
   );
+
+  // 詳細パネルの開閉ではなく、実際に変換結果へ影響する設定だけを比較する。
+  const conversionSettingsKey = JSON.stringify({
+    convertedFormat,
+    resize: !isAudioFormat(convertedFormat) && mediaDimensions
+      ? {
+          width: resizeWidth,
+          height: resizeHeight,
+          aspectRatioLocked,
+          antiAliasing,
+        }
+      : null,
+    pngCompressionLevel,
+    jpegQV,
+    webpQV,
+    gifFPS,
+    gifMaxColors,
+    videoCrf,
+    webmCrf,
+    aviQV,
+    audioCompression,
+  });
+  const conversionSettingsChanged =
+    convertedFile !== null && convertedSettingsKey !== conversionSettingsKey;
 
   const availableOutputFormats = useMemo<Format[]>(() => {
     if (!sourceFormat) {
@@ -127,11 +157,13 @@ function App() {
 
     setSourceFile(file);
     setConvertedFile(null);
+    setConvertedFileFormat(null);
+    setConvertedSettingsKey(null);
     setError(null);
     setMediaDimensions(null);
     setDimensionProbeError(null);
-    setResizeEnabled(false);
     setAspectRatioLocked(true);
+    setAntiAliasing(true);
 
     const probeId = ++dimensionProbeId.current;
 
@@ -183,13 +215,14 @@ function App() {
 
   const buildConversionOptions = () => {
     const resizeOptions =
-      resizeEnabled && !isAudioFormat(convertedFormat)
-        ? { width: resizeWidth, height: resizeHeight }
+      !isAudioFormat(convertedFormat) && mediaDimensions
+        ? {
+            width: resizeWidth,
+            height: resizeHeight,
+            antiAliasing,
+          }
         : {};
 
-    if (!detailsOpen) {
-      return resizeEnabled ? resizeOptions : undefined;
-    }
     switch (convertedFormat) {
       case "PNG":
         return {
@@ -289,6 +322,7 @@ function App() {
   const convertFile = async () => {
     if (!sourceFile || !sourceFormat) return;
 
+    const settingsKeyAtConversion = conversionSettingsKey;
     setIsConverting(true);
     setError(null);
 
@@ -314,11 +348,19 @@ function App() {
       const uint8Array =
         result instanceof Uint8Array ? result : new Uint8Array(result);
 
+      let outputName = `${stem}.${extension}`;
+      if (sourceFormat === convertedFormat) {
+        const sequence = ++sameFormatConversionSequence.current;
+        outputName = `${stem}_converted_${sequence}.${extension}`;
+      }
+
       setConvertedFile(
-        new File([uint8Array as BlobPart], `${stem}.${extension}`, {
+        new File([uint8Array as BlobPart], outputName, {
           type: mimeTypes[convertedFormat][0] || `application/octet-stream`,
         }),
       );
+      setConvertedFileFormat(convertedFormat);
+      setConvertedSettingsKey(settingsKeyAtConversion);
     } catch (error) {
       setError(
         `Error during conversion: ${
@@ -352,9 +394,8 @@ function App() {
 
   const handleFormatChange = (newFormat: Format) => {
     setConvertedFormat(newFormat);
-    setConvertedFile(null);
 
-    if (resizeEnabled && VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
+    if (mediaDimensions && VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
       setResizeWidth(normalizeVideoDimension(resizeWidth));
       setResizeHeight(normalizeVideoDimension(resizeHeight));
     }
@@ -422,18 +463,6 @@ function App() {
         ? normalizeVideoDimension(value)
         : clampDimension(value),
     );
-  };
-
-  const handleResizeEnabledChange = (enabled: boolean) => {
-    setResizeEnabled(enabled);
-    if (!enabled || !mediaDimensions) return;
-
-    const normalized = normalizeOutputDimensions(
-      mediaDimensions.width,
-      mediaDimensions.height,
-    );
-    setResizeWidth(normalized.width);
-    setResizeHeight(normalized.height);
   };
 
   const handleDrop = (event: React.DragEvent<HTMLButtonElement>) => {
@@ -706,7 +735,13 @@ function App() {
             onClick={convertFile}
             disabled={!sourceFile || isConverting}
           >
-            {isConverting ? "変換中…" : "変換を開始"}
+            {isConverting
+              ? "変換中…"
+              : conversionSettingsChanged
+                ? "設定を変更して再変換"
+                : convertedFile
+                  ? "もう一度変換"
+                  : "ファイルを変換"}
           </button>
         </div>
 
@@ -786,7 +821,7 @@ function App() {
               {convertedFile
                 ? `${Math.ceil(
                     convertedFile.size / 1024,
-                  ).toLocaleString()} KB ・ ${convertedFormat} 形式`
+                  ).toLocaleString()} KB ・ ${convertedFileFormat} 形式`
                 : "ファイルを追加して変換を開始してください"}
             </span>
 
@@ -864,14 +899,14 @@ function App() {
               <div className="flex flex-col gap-5">
                 <ResizeOptions
                   dimensions={mediaDimensions}
-                  enabled={resizeEnabled}
                   aspectRatioLocked={aspectRatioLocked}
+                  antiAliasing={antiAliasing}
                   width={resizeWidth}
                   height={resizeHeight}
                   isLoading={isProbingDimensions}
                   error={dimensionProbeError}
-                  onEnabledChange={handleResizeEnabledChange}
                   onAspectRatioLockedChange={setAspectRatioLocked}
+                  onAntiAliasingChange={setAntiAliasing}
                   onWidthChange={handleResizeWidthChange}
                   onHeightChange={handleResizeHeightChange}
                 />

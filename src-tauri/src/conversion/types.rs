@@ -233,6 +233,8 @@ impl AudioOptions {
 pub struct ConversionOptions {
     pub width: Option<u32>,
     pub height: Option<u32>,
+    /// リサイズ時に Lanczos 補間を使うか。未指定時は従来どおり有効。
+    pub anti_aliasing: Option<bool>,
     pub compression_level: Option<u32>,
     #[serde(rename = "qVJpeg")]
     pub q_v_jpeg: Option<u32>,

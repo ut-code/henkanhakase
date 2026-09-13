@@ -56,8 +56,12 @@ fn build_default_args(
 ) -> Vec<String> {
     let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
 
-    if let Some(scale) = build_scale_filter(options.width, options.height, output_format.is_video())
-    {
+    if let Some(scale) = build_scale_filter(
+        options.width,
+        options.height,
+        output_format.is_video(),
+        options.anti_aliasing.unwrap_or(true),
+    ) {
         args.extend(["-vf".into(), scale]);
     }
 
@@ -280,8 +284,13 @@ fn build_video_or_gif_to_gif_args(
 ) -> Vec<String> {
     let fps = options.fps.unwrap_or(15);
 
-    let scale = build_scale_filter(options.width, options.height, false)
-        .unwrap_or_else(|| "scale=iw:ih:flags=lanczos".into());
+    let scale = build_scale_filter(
+        options.width,
+        options.height,
+        false,
+        options.anti_aliasing.unwrap_or(true),
+    )
+    .unwrap_or_else(|| "scale=iw:ih:flags=lanczos".into());
 
     let filter = format!(
         "fps={fps},{scale},\
@@ -313,7 +322,12 @@ fn build_gif_to_video_args(
 ) -> Vec<String> {
     let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
 
-    if let Some(scale) = build_scale_filter(options.width, options.height, true) {
+    if let Some(scale) = build_scale_filter(
+        options.width,
+        options.height,
+        true,
+        options.anti_aliasing.unwrap_or(true),
+    ) {
         args.extend(["-vf".into(), scale]);
     } else {
         // H.264 等で奇数サイズが問題になることがあるため、元寸法も偶数化する
@@ -393,24 +407,26 @@ fn build_scale_filter(
     width: Option<u32>,
     height: Option<u32>,
     require_even: bool,
+    anti_aliasing: bool,
 ) -> Option<String> {
+    let flags = if anti_aliasing { "lanczos" } else { "neighbor" };
     let scale = match (width, height) {
         (Some(width), Some(height)) => {
             let width = normalize_dimension(width, require_even);
             let height = normalize_dimension(height, require_even);
-            Some(format!("scale={width}:{height}:flags=lanczos"))
+            Some(format!("scale={width}:{height}:flags={flags}"))
         }
 
         (Some(width), None) => {
             let width = normalize_dimension(width, require_even);
             let height = if require_even { -2 } else { -1 };
-            Some(format!("scale={width}:{height}:flags=lanczos"))
+            Some(format!("scale={width}:{height}:flags={flags}"))
         }
 
         (None, Some(height)) => {
             let width = if require_even { -2 } else { -1 };
             let height = normalize_dimension(height, require_even);
-            Some(format!("scale={width}:{height}:flags=lanczos"))
+            Some(format!("scale={width}:{height}:flags={flags}"))
         }
 
         (None, None) => None,
@@ -430,4 +446,25 @@ fn normalize_dimension(value: u32, require_even: bool) -> u32 {
 
 fn path_to_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_scale_filter;
+
+    #[test]
+    fn uses_lanczos_when_anti_aliasing_is_enabled() {
+        assert_eq!(
+            build_scale_filter(Some(100), Some(100), false, true),
+            Some("scale=100:100:flags=lanczos,setsar=1".into()),
+        );
+    }
+
+    #[test]
+    fn uses_nearest_neighbor_when_anti_aliasing_is_disabled() {
+        assert_eq!(
+            build_scale_filter(Some(100), Some(100), false, false),
+            Some("scale=100:100:flags=neighbor,setsar=1".into()),
+        );
+    }
 }
