@@ -41,6 +41,16 @@ async fn probe_media_dimensions(
         .map_err(ApiError::from)
 }
 
+#[tauri::command]
+async fn generate_thumbnail(
+    app: tauri::AppHandle,
+    request: MediaProbeRequest,
+) -> Result<Vec<u8>, ApiError> {
+    conversion::generate_thumbnail(&app, request)
+        .await
+        .map_err(ApiError::from)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -52,7 +62,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             convert_file,
             probe_media_dimensions,
-            cancel_conversion
+            cancel_conversion,
+            generate_thumbnail
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

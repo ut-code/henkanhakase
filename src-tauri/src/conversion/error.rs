@@ -11,6 +11,7 @@ pub enum ErrorCode {
     ConversionFailed,
     OutputReadFailed,
     ProbeFailed,
+    ThumbnailFailed,
 }
 
 #[derive(Debug, Serialize)]

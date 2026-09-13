@@ -15,6 +15,7 @@ use tauri_plugin_shell::ShellExt;
 
 pub use error::{ApiError, ConversionError, ErrorCode};
 pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
+use types::FileFormat;
 
 pub async fn convert(
     app: &AppHandle,
@@ -115,6 +116,55 @@ pub async fn probe_dimensions(
         fs::read(&probe_path).map_err(|_| ConversionError::new(ErrorCode::ProbeFailed))?;
 
     parse_png_dimensions(&probe_data)
+}
+
+pub async fn generate_thumbnail(
+    app: &AppHandle,
+    request: MediaProbeRequest,
+) -> Result<Vec<u8>, ConversionError> {
+    let workspace = TempWorkspace::new()?;
+    let input_path = workspace
+        .path()
+        .join(format!("input.{}", request.input_format.extension()));
+    let is_gif = request.input_format == FileFormat::Gif;
+    let thumbnail_path = workspace
+        .path()
+        .join(if is_gif { "thumbnail.png" } else { "thumbnail.jpg" });
+
+    fs::write(&input_path, request.data)
+        .map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?;
+
+    let mut args = vec![
+        "-y".to_string(),
+        "-i".to_string(),
+        input_path.to_string_lossy().into_owned(),
+        "-an".to_string(),
+        "-vf".to_string(),
+        "thumbnail=30,scale=iw*sar:ih,setsar=1,scale=640:640:force_original_aspect_ratio=decrease".to_string(),
+        "-frames:v".to_string(),
+        "1".to_string(),
+        "-update".to_string(),
+        "1".to_string(),
+    ];
+    if !is_gif {
+        args.extend(["-q:v".to_string(), "4".to_string()]);
+    }
+    args.push(thumbnail_path.to_string_lossy().into_owned());
+
+    let output = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|_| ConversionError::new(ErrorCode::FfmpegUnavailable))?
+        .args(args)
+        .output()
+        .await
+        .map_err(|_| ConversionError::new(ErrorCode::ThumbnailFailed))?;
+
+    if !output.status.success() {
+        return Err(ConversionError::new(ErrorCode::ThumbnailFailed));
+    }
+
+    fs::read(&thumbnail_path).map_err(|_| ConversionError::new(ErrorCode::ThumbnailFailed))
 }
 
 fn parse_png_dimensions(data: &[u8]) -> Result<MediaDimensions, ConversionError> {
