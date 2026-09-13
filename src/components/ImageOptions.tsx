@@ -1,8 +1,8 @@
 import {
   type Format,
   type ImageFormat,
-  type VideoFormat,
   VIDEO_FORMATS,
+  type VideoFormat,
 } from "../formats";
 
 export type ImageOptionsProps = {
@@ -56,9 +56,7 @@ export function ImageOptions({
             max="9"
             value={pngCompressionLevel}
             onChange={(e) =>
-              onPngCompressionLevelChange(
-                Number.parseInt(e.target.value, 10),
-              )
+              onPngCompressionLevelChange(Number.parseInt(e.target.value, 10))
             }
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />

@@ -69,6 +69,9 @@ function App() {
   const [resizeWidth, setResizeWidth] = useState(1);
   const [resizeHeight, setResizeHeight] = useState(1);
   const [antiAliasing, setAntiAliasing] = useState(true);
+  const [lastChangedResizeAxis, setLastChangedResizeAxis] = useState<
+    "width" | "height"
+  >("width");
   const dimensionProbeId = useRef(0);
   const outputConversionSequences = useRef(new Map<string, number>());
 
@@ -164,6 +167,7 @@ function App() {
     setDimensionProbeError(null);
     setAspectRatioLocked(true);
     setAntiAliasing(true);
+    setLastChangedResizeAxis("width");
 
     const probeId = ++dimensionProbeId.current;
 
@@ -319,6 +323,14 @@ function App() {
     return undefined;
   };
 
+  const cancelConversion = async () => {
+    try {
+      await invoke("cancel_conversion");
+    } catch (cancelError) {
+      console.error("変換のキャンセルに失敗しました:", cancelError);
+    }
+  };
+
   const convertFile = async () => {
     if (!sourceFile || !sourceFormat) return;
 
@@ -362,11 +374,16 @@ function App() {
       setConvertedFileFormat(convertedFormat);
       setConvertedSettingsKey(settingsKeyAtConversion);
     } catch (error) {
-      setError(
-        `Error during conversion: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      const errorMessage = String(error);
+      if (errorMessage.includes("cancelled")) {
+        setError("変換がキャンセルされました。");
+      } else {
+        setError(
+          `Error during conversion: ${
+            error instanceof Error ? error.message : errorMessage
+          }`,
+        );
+      }
     } finally {
       setIsConverting(false);
     }
@@ -442,6 +459,7 @@ function App() {
   };
 
   const handleResizeWidthChange = (value: number) => {
+    setLastChangedResizeAxis("width");
     if (aspectRatioLocked) {
       updateLockedDimensions(value, "width");
       return;
@@ -454,6 +472,7 @@ function App() {
   };
 
   const handleResizeHeightChange = (value: number) => {
+    setLastChangedResizeAxis("height");
     if (aspectRatioLocked) {
       updateLockedDimensions(value, "height");
       return;
@@ -463,6 +482,16 @@ function App() {
         ? normalizeVideoDimension(value)
         : clampDimension(value),
     );
+  };
+
+  const handleAspectRatioLockedChange = (locked: boolean) => {
+    setAspectRatioLocked(locked);
+    if (locked) {
+      updateLockedDimensions(
+        lastChangedResizeAxis === "width" ? resizeWidth : resizeHeight,
+        lastChangedResizeAxis,
+      );
+    }
   };
 
   const handleDrop = (event: React.DragEvent<HTMLButtonElement>) => {
@@ -709,40 +738,61 @@ function App() {
             <b className="text-[#596ff1]">{convertedFormat}</b> に変換
           </p>
 
-          <button
-            type="button"
-            className="
-              mt-6.25
-              min-w-31.5
-              rounded-[9px]
-              border-0
-              bg-linear-to-br from-[#6177f6] to-[#7c69e9]
-              px-4
-              py-2.75
-              text-xs
-              font-bold
-              text-white
-              shadow-[0_5px_13px_rgba(93,111,232,0.22)]
-              transition duration-200
-              hover:-translate-y-px
-              hover:brightness-[1.04]
-              disabled:cursor-not-allowed
-              disabled:bg-[#c7ceda]
-              disabled:bg-none
-              disabled:shadow-none
-              disabled:transform-none
-            "
-            onClick={convertFile}
-            disabled={!sourceFile || isConverting}
-          >
-            {isConverting
-              ? "変換中…"
-              : conversionSettingsChanged
+          {isConverting ? (
+            <button
+              type="button"
+              className="
+                mt-6.25
+                min-w-31.5
+                rounded-[9px]
+                border border-[#d76269]
+                bg-white
+                px-4
+                py-2.75
+                text-xs
+                font-bold
+                text-[#d76269]
+                transition duration-200
+                hover:bg-[#fff5f5]
+              "
+              onClick={cancelConversion}
+            >
+              キャンセル
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="
+                mt-6.25
+                min-w-31.5
+                rounded-[9px]
+                border-0
+                bg-linear-to-br from-[#6177f6] to-[#7c69e9]
+                px-4
+                py-2.75
+                text-xs
+                font-bold
+                text-white
+                shadow-[0_5px_13px_rgba(93,111,232,0.22)]
+                transition duration-200
+                hover:-translate-y-px
+                hover:brightness-[1.04]
+                disabled:cursor-not-allowed
+                disabled:bg-[#c7ceda]
+                disabled:bg-none
+                disabled:shadow-none
+                disabled:transform-none
+              "
+              onClick={convertFile}
+              disabled={!sourceFile}
+            >
+              {conversionSettingsChanged
                 ? "設定を変更して再変換"
                 : convertedFile
                   ? "もう一度変換"
                   : "ファイルを変換"}
-          </button>
+            </button>
+          )}
         </div>
 
         {/* Output Panel */}
@@ -905,7 +955,7 @@ function App() {
                   height={resizeHeight}
                   isLoading={isProbingDimensions}
                   error={dimensionProbeError}
-                  onAspectRatioLockedChange={setAspectRatioLocked}
+                  onAspectRatioLockedChange={handleAspectRatioLockedChange}
                   onAntiAliasingChange={setAntiAliasing}
                   onWidthChange={handleResizeWidthChange}
                   onHeightChange={handleResizeHeightChange}
