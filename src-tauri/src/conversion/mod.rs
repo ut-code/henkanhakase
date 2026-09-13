@@ -4,7 +4,7 @@ mod types;
 
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -20,19 +20,32 @@ pub async fn convert(
     app: &AppHandle,
     request: ConversionRequest,
     cancel_flag: Arc<AtomicBool>,
-) -> Result<Vec<u8>, ConversionError> {
-    let workspace = TempWorkspace::new()?;
+) -> Result<String, ConversionError> {
+    // 1. 入力ファイルの存在チェック（絶対パス）
+    let input_path = PathBuf::from(&request.input_path);
+    if !input_path.exists() {
+        return Err(ConversionError::new(ErrorCode::InputFileNotFound));
+    }
 
-    let input_path = workspace
-        .path()
-        .join(format!("input.{}", request.input_format.extension()));
-    let output_path = workspace
-        .path()
-        .join(format!("output.{}", request.output_format.extension()));
+    // 2. 一時出力先ディレクトリの準備
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|_| ConversionError::new(ErrorCode::TempDirCreationFailed))?;
 
-    fs::write(&input_path, request.data)
-        .map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| ConversionError::new(ErrorCode::TimestampFetchFailed))?
+        .as_nanos();
 
+    // 出力先一時ファイルの絶対パス
+    let output_path = temp_dir.join(format!(
+        "{}_{}.{}",
+        request.stem,
+        timestamp,
+        request.output_format.extension()
+    ));
+
+    // 3. FFmpeg 引数の組み立て (絶対パス同士で指定)
     let args = ffmpeg::build_args(
         &input_path,
         &output_path,
@@ -42,7 +55,7 @@ pub async fn convert(
     )
     .map_err(|_| ConversionError::new(ErrorCode::InvalidOptions))?;
 
-    // 1. .output() ではなく .spawn() を使用してプロセスを起動する
+    // 4. Sidecar (FFmpeg) の起動
     let (mut rx, child) = app
         .shell()
         .sidecar("ffmpeg")
@@ -51,48 +64,60 @@ pub async fn convert(
         .spawn()
         .map_err(|_| ConversionError::new(ErrorCode::FfmpegStartFailed))?;
 
-    // 2. FFmpeg の実行完了、またはキャンセルフラグの変更を非同期にループ監視する
+    // 5. キャンセル監視付きの非同期実行ループ
     loop {
-        // フロントエンドから cancel_conversion が呼ばれたかをチェック
         if cancel_flag.load(Ordering::Relaxed) {
-            // FFmpeg プロセスを強制終了する
             let _ = child.kill();
+            // キャンセル時は一時ファイルを削除
+            let _ = fs::remove_file(&output_path);
             return Err(ConversionError::new(ErrorCode::ConversionCancelled));
         }
 
-        // FFmpeg からのイベント（出力ログや終了通知）を確認する
         if let Ok(Some(tauri_plugin_shell::process::CommandEvent::Terminated(payload))) =
             tokio::time::timeout(Duration::from_millis(100), rx.recv()).await
         {
             if payload.code != Some(0) {
+                let _ = fs::remove_file(&output_path);
                 return Err(ConversionError::new(ErrorCode::ConversionFailed));
             }
-            // 正常終了したためループを抜ける
             break;
         }
     }
 
-    fs::read(&output_path).map_err(|_| ConversionError::new(ErrorCode::OutputReadFailed))
+    // 出力ファイルが正常に生成されたことを確認してパス文字列を返す
+    if !output_path.exists() {
+        return Err(ConversionError::new(ErrorCode::OutputFileNotGenerated));
+    }
+
+    Ok(output_path.to_string_lossy().into_owned())
 }
 
 pub async fn probe_dimensions(
     app: &AppHandle,
     request: MediaProbeRequest,
 ) -> Result<MediaDimensions, ConversionError> {
-    let workspace = TempWorkspace::new()?;
-    let input_path = workspace
-        .path()
-        .join(format!("input.{}", request.input_format.extension()));
-    let probe_path = workspace.path().join("probe.png");
+    let input_path = PathBuf::from(&request.input_path);
+    if !input_path.exists() {
+        return Err(ConversionError::new(ErrorCode::InputFileNotFound));
+    }
 
-    fs::write(&input_path, request.data)
-        .map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?;
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|_| ConversionError::new(ErrorCode::TempDirCreationFailed))?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| ConversionError::new(ErrorCode::TimestampFetchFailed))?
+        .as_nanos();
+
+    let probe_path = temp_dir.join(format!("probe_{}.png", timestamp));
 
     let output = app
         .shell()
         .sidecar("ffmpeg")
         .map_err(|_| ConversionError::new(ErrorCode::FfmpegUnavailable))?
         .args([
+            "-y".to_string(),
             "-i".to_string(),
             input_path.to_string_lossy().into_owned(),
             "-frames:v".to_string(),
@@ -108,11 +133,15 @@ pub async fn probe_dimensions(
         .map_err(|_| ConversionError::new(ErrorCode::ProbeFailed))?;
 
     if !output.status.success() {
+        let _ = fs::remove_file(&probe_path);
         return Err(ConversionError::new(ErrorCode::ProbeFailed));
     }
 
     let probe_data =
         fs::read(&probe_path).map_err(|_| ConversionError::new(ErrorCode::ProbeFailed))?;
+
+    // 解析後、一時プローブ画像は不要のため即時削除
+    let _ = fs::remove_file(&probe_path);
 
     parse_png_dimensions(&probe_data)
 }
@@ -132,35 +161,4 @@ fn parse_png_dimensions(data: &[u8]) -> Result<MediaDimensions, ConversionError>
     }
 
     Ok(MediaDimensions { width, height })
-}
-
-struct TempWorkspace {
-    path: PathBuf,
-}
-
-impl TempWorkspace {
-    fn new() -> Result<Self, ConversionError> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?
-            .as_nanos();
-
-        let name = format!("henkanhakase-{}-{timestamp}", std::process::id());
-
-        let path = std::env::temp_dir().join(name);
-
-        fs::create_dir_all(&path).map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?;
-
-        Ok(Self { path })
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempWorkspace {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
-    }
 }

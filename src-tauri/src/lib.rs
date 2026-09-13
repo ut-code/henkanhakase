@@ -15,7 +15,7 @@ async fn convert_file(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: ConversionRequest,
-) -> Result<Vec<u8>, ApiError> {
+) -> Result<String, ApiError> {
     // 変換開始時にキャンセルフラグを「false（未キャンセル）」にリセット
     state.cancel_flag.store(false, Ordering::Relaxed);
 
