@@ -70,7 +70,7 @@ function App() {
   const [resizeHeight, setResizeHeight] = useState(1);
   const [antiAliasing, setAntiAliasing] = useState(true);
   const dimensionProbeId = useRef(0);
-  const sameFormatConversionSequence = useRef(0);
+  const outputConversionSequences = useRef(new Map<string, number>());
 
   const [pngCompressionLevel, setPngCompressionLevel] = useState<number>(9);
   const [jpegQV, setJpegQV] = useState<number>(3);
@@ -348,11 +348,11 @@ function App() {
       const uint8Array =
         result instanceof Uint8Array ? result : new Uint8Array(result);
 
-      let outputName = `${stem}.${extension}`;
-      if (sourceFormat === convertedFormat) {
-        const sequence = ++sameFormatConversionSequence.current;
-        outputName = `${stem}_converted_${sequence}.${extension}`;
-      }
+      const sequenceKey = stem;
+      const sequence =
+        (outputConversionSequences.current.get(sequenceKey) ?? 0) + 1;
+      outputConversionSequences.current.set(sequenceKey, sequence);
+      const outputName = `${stem}_${sequence}.${extension}`;
 
       setConvertedFile(
         new File([uint8Array as BlobPart], outputName, {
