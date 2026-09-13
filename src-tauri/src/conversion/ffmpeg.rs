@@ -30,11 +30,11 @@ pub fn build_args(
         ));
     }
 
-    if input_format.is_video()
-        && output_format.is_audio()
-    {
-        return Ok(build_video_to_audio_args(input_path, output_path, options));
-    }
+    // if input_format.is_video()
+    //     && output_format.is_audio()
+    // {
+    //     return Ok(build_video_to_audio_args(input_path, output_path, options));
+    // }
 
     // 音声変換
     if output_format.is_audio() {
