@@ -10,7 +10,7 @@ use std::{
 use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 
-pub use types::ConversionRequest;
+pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
 
 pub async fn convert(app: &AppHandle, request: ConversionRequest) -> Result<Vec<u8>, String> {
     let workspace = TempWorkspace::new()?;
@@ -18,7 +18,6 @@ pub async fn convert(app: &AppHandle, request: ConversionRequest) -> Result<Vec<
     let input_path = workspace
         .path()
         .join(format!("input.{}", request.input_format.extension()));
-
     let output_path = workspace
         .path()
         .join(format!("output.{}", request.output_format.extension()));
@@ -50,6 +49,66 @@ pub async fn convert(app: &AppHandle, request: ConversionRequest) -> Result<Vec<
     }
 
     fs::read(&output_path).map_err(|e| format!("出力ファイルの読み込みに失敗しました: {e}"))
+}
+
+pub async fn probe_dimensions(
+    app: &AppHandle,
+    request: MediaProbeRequest,
+) -> Result<MediaDimensions, String> {
+    let workspace = TempWorkspace::new()?;
+    let input_path = workspace
+        .path()
+        .join(format!("input.{}", request.input_format.extension()));
+    let probe_path = workspace.path().join("probe.png");
+
+    fs::write(&input_path, request.data)
+        .map_err(|e| format!("入力ファイルの作成に失敗しました: {e}"))?;
+
+    let output = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|e| format!("FFmpeg Sidecar の初期化に失敗しました: {e}"))?
+        .args([
+            "-i".to_string(),
+            input_path.to_string_lossy().into_owned(),
+            "-frames:v".to_string(),
+            "1".to_string(),
+            "-f".to_string(),
+            "image2pipe".to_string(),
+            "-vcodec".to_string(),
+            "png".to_string(),
+            probe_path.to_string_lossy().into_owned(),
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("メディアサイズの取得に失敗しました: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("メディアサイズの取得に失敗しました: {stderr}"));
+    }
+
+    let probe_data = fs::read(&probe_path)
+        .map_err(|e| format!("サイズ取得結果の読み込みに失敗しました: {e}"))?;
+
+    parse_png_dimensions(&probe_data)
+}
+
+fn parse_png_dimensions(data: &[u8]) -> Result<MediaDimensions, String> {
+    const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+
+    if data.len() < 24 || &data[..8] != PNG_SIGNATURE || &data[12..16] != b"IHDR" {
+        return Err("FFmpegから有効な画像サイズを取得できませんでした".into());
+    }
+
+    let width = u32::from_be_bytes(data[16..20].try_into().unwrap());
+    let height = u32::from_be_bytes(data[20..24].try_into().unwrap());
+
+    if width == 0 || height == 0 {
+        return Err("取得した画像サイズが不正です".into());
+    }
+
+    Ok(MediaDimensions { width, height })
 }
 
 struct TempWorkspace {

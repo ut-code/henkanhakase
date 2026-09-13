@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum FileFormat {
@@ -248,17 +248,31 @@ pub struct ConversionOptions {
     pub audio: Option<AudioOptions>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaProbeRequest {
+    pub data: Vec<u8>,
+    pub input_format: FileFormat,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaDimensions {
+    pub width: u32,
+    pub height: u32,
+}
+
 impl ConversionOptions {
     pub fn validate(&self, output_format: FileFormat) -> Result<(), String> {
         if let Some(width) = self.width {
-            if width == 0 {
-                return Err("幅は 1 以上で指定してください".into());
+            if !(1..=16384).contains(&width) {
+                return Err("幅は 1〜16384 の範囲で指定してください".into());
             }
         }
 
         if let Some(height) = self.height {
-            if height == 0 {
-                return Err("高さは 1 以上で指定してください".into());
+            if !(1..=16384).contains(&height) {
+                return Err("高さは 1〜16384 の範囲で指定してください".into());
             }
         }
 
