@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { MediaDimensions } from "../formats";
+import { useTranslation } from "../i18n";
 
 type ResizeOptionsProps = {
   dimensions: MediaDimensions | null;
@@ -28,6 +29,7 @@ export function ResizeOptions({
   onWidthChange,
   onHeightChange,
 }: ResizeOptionsProps) {
+  const { t } = useTranslation();
   const [widthInput, setWidthInput] = useState(String(width));
   const [heightInput, setHeightInput] = useState(String(height));
 
@@ -52,14 +54,14 @@ export function ResizeOptions({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs font-semibold text-[#415166]">出力サイズ</span>
+        <span className="text-xs font-semibold text-[#415166]">{t("outputSize")}</span>
 
         <span className="text-[11px] text-[#9aa6b7]">
           {isLoading
-            ? "元のサイズを取得中…"
+            ? t("sourceSizeLoading")
             : dimensions
-              ? `元のサイズ: ${dimensions.width} × ${dimensions.height} px`
-              : "元のサイズを取得できません"}
+              ? t("sourceSize", dimensions)
+              : t("sourceSizeUnavailable")}
         </span>
       </div>
 
@@ -68,7 +70,7 @@ export function ResizeOptions({
       {dimensions && (
         <div className="flex flex-wrap items-end gap-4">
           <label className="flex min-w-35 flex-col gap-1.5 text-xs font-semibold text-[#415166]">
-            幅 (px)
+            {t("width")}
             <input
               type="number"
               min={1}
@@ -86,7 +88,7 @@ export function ResizeOptions({
           <span className="pb-2 text-xs text-[#9aa6b7]">×</span>
 
           <label className="flex min-w-35 flex-col gap-1.5 text-xs font-semibold text-[#415166]">
-            高さ (px)
+            {t("height")}
             <input
               type="number"
               min={1}
@@ -110,7 +112,7 @@ export function ResizeOptions({
               }
               className="size-4 accent-[#586cec]"
             />
-            縦横比を固定
+            {t("lockAspect")}
           </label>
 
           <label className="flex items-center gap-2 pb-2 text-xs text-[#5b687c]">
@@ -120,7 +122,7 @@ export function ResizeOptions({
               onChange={(event) => onAntiAliasingChange(event.target.checked)}
               className="size-4 accent-[#586cec]"
             />
-            アンチエイリアス
+            {t("antiAliasing")}
           </label>
         </div>
       )}

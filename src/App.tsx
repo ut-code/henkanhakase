@@ -24,6 +24,7 @@ import { AudioOptions } from "./components/AudioOptions";
 import { ImageOptions } from "./components/ImageOptions";
 import { VideoOptions } from "./components/VideoOptions";
 import { ResizeOptions } from "./components/ResizeOptions";
+import { type Translation, useTranslation } from "./i18n";
 
 const MAX_DIMENSION = 16384;
 
@@ -38,7 +39,33 @@ function normalizeVideoDimension(value: number): number {
   return Math.min(MAX_DIMENSION, clamped + 1);
 }
 
+function apiErrorMessage(error: unknown, t: Translation): string {
+  const value = typeof error === "string" ? tryParseError(error) : error;
+  const code = typeof value === "string"
+    ? value
+    : typeof value === "object" && value !== null && "code" in value
+      ? (value as { code: unknown }).code
+      : null;
+  const errorKeys = {
+    conversion_cancelled: "error_conversion_cancelled",
+    invalid_options: "error_invalid_options",
+    input_write_failed: "error_input_write_failed",
+    ffmpeg_unavailable: "error_ffmpeg_unavailable",
+    ffmpeg_start_failed: "error_ffmpeg_start_failed",
+    conversion_failed: "error_conversion_failed",
+    output_read_failed: "error_output_read_failed",
+    probe_failed: "error_probe_failed",
+  } as const;
+  if (typeof code === "string" && code in errorKeys) return t(errorKeys[code as keyof typeof errorKeys]);
+  return t("error_unexpected");
+}
+
+function tryParseError(error: string): unknown {
+  try { return JSON.parse(error); } catch { return error; }
+}
+
 function App() {
+  const { locale, setLocale, t } = useTranslation();
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [convertedFile, setConvertedFile] = useState<File | null>(null);
   const [convertedFileFormat, setConvertedFileFormat] =
@@ -152,9 +179,7 @@ function App() {
     ) as Format | undefined;
 
     if (!detectedFormat) {
-      setError(
-        `${file.type} はサポートされていない形式です。対応形式：${SUPPORTED_FORMATS.join(", ")}`,
-      );
+      setError(t("unsupportedFormat", { type: file.type, formats: SUPPORTED_FORMATS.join(", ") }));
       return;
     }
 
@@ -327,7 +352,7 @@ function App() {
     try {
       await invoke("cancel_conversion");
     } catch (cancelError) {
-      console.error("変換のキャンセルに失敗しました:", cancelError);
+      console.error(t("cancelFailed"), cancelError);
     }
   };
 
@@ -374,16 +399,7 @@ function App() {
       setConvertedFileFormat(convertedFormat);
       setConvertedSettingsKey(settingsKeyAtConversion);
     } catch (error) {
-      const errorMessage = String(error);
-      if (errorMessage.includes("cancelled")) {
-        setError("変換がキャンセルされました。");
-      } else {
-        setError(
-          `Error during conversion: ${
-            error instanceof Error ? error.message : errorMessage
-          }`,
-        );
-      }
+      setError(apiErrorMessage(error, t));
     } finally {
       setIsConverting(false);
     }
@@ -405,7 +421,7 @@ function App() {
 
       await writeFile(filePath, new Uint8Array(buffer));
     } catch (error) {
-      console.error("ファイルの保存に失敗しました:", error);
+      console.error(t("saveFailed"), error);
     }
   };
 
@@ -538,10 +554,10 @@ function App() {
           >
             H
           </span>
-          変換はかせ
+          {t("appName")}
         </div>
 
-        <div className="flex items-center gap-1.75 text-xs text-[#8390a3]">
+        <div className="flex items-center gap-3 text-xs text-[#8390a3]">
           <span
             className={[
               "size-1.75 rounded-full bg-[#aeb8c7]",
@@ -552,7 +568,14 @@ function App() {
               .join(" ")}
           />
 
-          {isConverting ? "変換中" : "変換待機中"}
+          {isConverting ? t("converting") : t("waiting")}
+          <label className="flex items-center gap-1">
+            <span className="sr-only">{t("language")}</span>
+            <select value={locale} onChange={(event) => setLocale(event.target.value as typeof locale)} className="rounded border border-[#dfe5ef] bg-white px-2 py-1 text-xs text-[#40506a]">
+              <option value="ja">日本語</option>
+              <option value="en">English</option>
+            </select>
+          </label>
         </div>
       </header>
 
@@ -569,7 +592,7 @@ function App() {
           max-[980px]:gap-6
           max-[980px]:py-7.5
         "
-        aria-label="ファイル変換"
+        aria-label={t("conversionWorkspace")}
       >
         {/* Input Panel */}
         <div
@@ -601,11 +624,11 @@ function App() {
 
             <div>
               <h1 className="mb-0.75 text-base font-bold text-[#26354a]">
-                変換するファイル
+                {t("sourceTitle")}
               </h1>
 
               <p className="m-0 text-xs text-[#99a4b5]">
-                ファイルを追加してください
+                {t("sourceHint")}
               </p>
             </div>
           </div>
@@ -639,7 +662,7 @@ function App() {
                 text-[#6276f7]
               "
             >
-              <img src={UploadIcon} alt="Upload" />
+              <img src={UploadIcon} alt="" />
             </span>
 
             <strong
@@ -653,11 +676,11 @@ function App() {
                 text-[#3c4a60]
               "
             >
-              {sourceFile?.name ?? "ファイルをここにドロップ"}
+              {sourceFile?.name ?? t("dropFile")}
             </strong>
 
             <span className="text-xs">
-              {sourceFile ? "別のファイルを選択" : "または、クリックして選択"}
+              {sourceFile ? t("chooseAnother") : t("chooseFile")}
             </span>
           </button>
 
@@ -688,7 +711,7 @@ function App() {
             htmlFor="format"
             className="mb-1.75 text-[11px] text-[#94a0b3]"
           >
-            変換形式
+            {t("outputFormat")}
           </label>
 
           <select
@@ -735,7 +758,7 @@ function App() {
               ${!sourceFile ? "invisible" : ""}
             `}
           >
-            <b className="text-[#596ff1]">{convertedFormat}</b> に変換
+            {t("convertTo", { format: convertedFormat })}
           </p>
 
           {isConverting ? (
@@ -757,7 +780,7 @@ function App() {
               "
               onClick={cancelConversion}
             >
-              キャンセル
+              {t("cancel")}
             </button>
           ) : (
             <button
@@ -787,10 +810,10 @@ function App() {
               disabled={!sourceFile}
             >
               {conversionSettingsChanged
-                ? "設定を変更して再変換"
+                ? t("reconvertChanged")
                 : convertedFile
-                  ? "もう一度変換"
-                  : "ファイルを変換"}
+                  ? t("convertAgain")
+                  : t("convert")}
             </button>
           )}
         </div>
@@ -825,11 +848,11 @@ function App() {
 
             <div>
               <h2 className="mb-0.75 text-base font-bold text-[#26354a]">
-                変換後のファイル
+                {t("outputTitle")}
               </h2>
 
               <p className="m-0 text-xs text-[#99a4b5]">
-                変換結果がここに表示されます
+                {t("outputHint")}
               </p>
             </div>
           </div>
@@ -850,7 +873,7 @@ function App() {
                 text-[#a9b4c4]
               "
             >
-              <img src={FileIcon} alt="File" />
+              <img src={FileIcon} alt="" />
             </span>
 
             <strong
@@ -864,15 +887,15 @@ function App() {
                 text-[#3c4a60]
               "
             >
-              {convertedFile?.name ?? "まだ変換されたファイルはありません"}
+              {convertedFile?.name ?? t("noOutput")}
             </strong>
 
             <span className="text-xs">
               {convertedFile
                 ? `${Math.ceil(
                     convertedFile.size / 1024,
-                  ).toLocaleString()} KB ・ ${convertedFileFormat} 形式`
-                : "ファイルを追加して変換を開始してください"}
+                  ).toLocaleString()} KB ・ ${t("formatLabel", { format: convertedFileFormat ?? "" })}`
+                : t("addAndConvert")}
             </span>
 
             {convertedFile && (
@@ -895,7 +918,7 @@ function App() {
                 "
                 onClick={saveFile}
               >
-                ファイルに保存
+                {t("saveFile")}
               </button>
             )}
           </div>
@@ -940,7 +963,7 @@ function App() {
           >
             ⌃
           </span>
-          詳細
+          {t("details")}
         </button>
 
         {detailsOpen && (
@@ -999,8 +1022,8 @@ function App() {
             ) : (
               <p className="text-xs text-[#9aa6b7]">
                 {sourceFile
-                  ? "この変換形式で設定可能な詳細オプションはありません"
-                  : "ファイルを選択するとオプションを設定できます"}
+                  ? t("noOptions")
+                  : t("chooseForOptions")}
               </p>
             )}
           </div>
