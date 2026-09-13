@@ -64,6 +64,9 @@ function App() {
   const [aspectRatioLocked, setAspectRatioLocked] = useState(true);
   const [resizeWidth, setResizeWidth] = useState(1);
   const [resizeHeight, setResizeHeight] = useState(1);
+  const [lastChangedResizeAxis, setLastChangedResizeAxis] = useState<
+    "width" | "height"
+  >("width");
   const dimensionProbeId = useRef(0);
 
   const [pngCompressionLevel, setPngCompressionLevel] = useState<number>(9);
@@ -132,6 +135,7 @@ function App() {
     setDimensionProbeError(null);
     setResizeEnabled(false);
     setAspectRatioLocked(true);
+    setLastChangedResizeAxis("width");
 
     const probeId = ++dimensionProbeId.current;
 
@@ -401,6 +405,7 @@ function App() {
   };
 
   const handleResizeWidthChange = (value: number) => {
+    setLastChangedResizeAxis("width");
     if (aspectRatioLocked) {
       updateLockedDimensions(value, "width");
       return;
@@ -413,6 +418,7 @@ function App() {
   };
 
   const handleResizeHeightChange = (value: number) => {
+    setLastChangedResizeAxis("height");
     if (aspectRatioLocked) {
       updateLockedDimensions(value, "height");
       return;
@@ -434,6 +440,17 @@ function App() {
     );
     setResizeWidth(normalized.width);
     setResizeHeight(normalized.height);
+    setLastChangedResizeAxis("width");
+  };
+
+  const handleAspectRatioLockedChange = (locked: boolean) => {
+    setAspectRatioLocked(locked);
+    if (locked) {
+      updateLockedDimensions(
+        lastChangedResizeAxis === "width" ? resizeWidth : resizeHeight,
+        lastChangedResizeAxis,
+      );
+    }
   };
 
   const handleDrop = (event: React.DragEvent<HTMLButtonElement>) => {
@@ -871,7 +888,7 @@ function App() {
                   isLoading={isProbingDimensions}
                   error={dimensionProbeError}
                   onEnabledChange={handleResizeEnabledChange}
-                  onAspectRatioLockedChange={setAspectRatioLocked}
+                  onAspectRatioLockedChange={handleAspectRatioLockedChange}
                   onWidthChange={handleResizeWidthChange}
                   onHeightChange={handleResizeHeightChange}
                 />
