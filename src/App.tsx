@@ -5,25 +5,25 @@ import { useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
 import UploadIcon from "./assets/upload.svg";
-import { AudioOptions } from "./components/AudioOptions";
-import { ImageOptions } from "./components/ImageOptions";
-import { ResizeOptions } from "./components/ResizeOptions";
-import { VideoOptions } from "./components/VideoOptions";
 import {
+  IMAGE_FORMATS,
+  VIDEO_FORMATS,
   AUDIO_FORMATS,
-  type AudioCompressionOptions,
+  SUPPORTED_FORMATS,
+  type ImageFormat,
+  type VideoFormat,
   type AudioFormat,
   type Format,
-  formatToExtension,
-  IMAGE_FORMATS,
-  type ImageFormat,
-  isAudioFormat,
+  type AudioCompressionOptions,
   type MediaDimensions,
   mimeTypes,
-  SUPPORTED_FORMATS,
-  VIDEO_FORMATS,
-  type VideoFormat,
+  formatToExtension,
+  isAudioFormat,
 } from "./formats.ts";
+import { AudioOptions } from "./components/AudioOptions";
+import { ImageOptions } from "./components/ImageOptions";
+import { VideoOptions } from "./components/VideoOptions";
+import { ResizeOptions } from "./components/ResizeOptions";
 
 const MAX_DIMENSION = 16384;
 
@@ -41,6 +41,11 @@ function normalizeVideoDimension(value: number): number {
 function App() {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [convertedFile, setConvertedFile] = useState<File | null>(null);
+  const [convertedFileFormat, setConvertedFileFormat] =
+    useState<Format | null>(null);
+  const [convertedSettingsKey, setConvertedSettingsKey] = useState<
+    string | null
+  >(null);
   const sourceFormat = useMemo<Format | null>(
     () =>
       sourceFile
@@ -51,7 +56,7 @@ function App() {
     [sourceFile],
   );
   const [convertedFormat, setConvertedFormat] = useState<Format>("PNG");
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const [isConverting, setIsConverting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mediaDimensions, setMediaDimensions] =
@@ -60,14 +65,15 @@ function App() {
   const [dimensionProbeError, setDimensionProbeError] = useState<string | null>(
     null,
   );
-  const [resizeEnabled, setResizeEnabled] = useState(false);
   const [aspectRatioLocked, setAspectRatioLocked] = useState(true);
   const [resizeWidth, setResizeWidth] = useState(1);
   const [resizeHeight, setResizeHeight] = useState(1);
+  const [antiAliasing, setAntiAliasing] = useState(true);
   const [lastChangedResizeAxis, setLastChangedResizeAxis] = useState<
     "width" | "height"
   >("width");
   const dimensionProbeId = useRef(0);
+  const outputConversionSequences = useRef(new Map<string, number>());
 
   const [pngCompressionLevel, setPngCompressionLevel] = useState<number>(9);
   const [jpegQV, setJpegQV] = useState<number>(3);
@@ -90,7 +96,33 @@ function App() {
 
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const isVideoOutput = VIDEO_FORMATS.includes(convertedFormat as VideoFormat);
+  const isVideoOutput = VIDEO_FORMATS.includes(
+    convertedFormat as VideoFormat,
+  );
+
+  // 詳細パネルの開閉ではなく、実際に変換結果へ影響する設定だけを比較する。
+  const conversionSettingsKey = JSON.stringify({
+    convertedFormat,
+    resize: !isAudioFormat(convertedFormat) && mediaDimensions
+      ? {
+          width: resizeWidth,
+          height: resizeHeight,
+          aspectRatioLocked,
+          antiAliasing,
+        }
+      : null,
+    pngCompressionLevel,
+    jpegQV,
+    webpQV,
+    gifFPS,
+    gifMaxColors,
+    videoCrf,
+    webmCrf,
+    aviQV,
+    audioCompression,
+  });
+  const conversionSettingsChanged =
+    convertedFile !== null && convertedSettingsKey !== conversionSettingsKey;
 
   const availableOutputFormats = useMemo<Format[]>(() => {
     if (!sourceFormat) {
@@ -128,11 +160,13 @@ function App() {
 
     setSourceFile(file);
     setConvertedFile(null);
+    setConvertedFileFormat(null);
+    setConvertedSettingsKey(null);
     setError(null);
     setMediaDimensions(null);
     setDimensionProbeError(null);
-    setResizeEnabled(false);
     setAspectRatioLocked(true);
+    setAntiAliasing(true);
     setLastChangedResizeAxis("width");
 
     const probeId = ++dimensionProbeId.current;
@@ -185,13 +219,14 @@ function App() {
 
   const buildConversionOptions = () => {
     const resizeOptions =
-      resizeEnabled && !isAudioFormat(convertedFormat)
-        ? { width: resizeWidth, height: resizeHeight }
+      !isAudioFormat(convertedFormat) && mediaDimensions
+        ? {
+            width: resizeWidth,
+            height: resizeHeight,
+            antiAliasing,
+          }
         : {};
 
-    if (!detailsOpen) {
-      return resizeEnabled ? resizeOptions : undefined;
-    }
     switch (convertedFormat) {
       case "PNG":
         return {
@@ -291,14 +326,15 @@ function App() {
   const cancelConversion = async () => {
     try {
       await invoke("cancel_conversion");
-    } catch (err) {
-      console.error("Failed to cancel conversion:", err);
+    } catch (cancelError) {
+      console.error("変換のキャンセルに失敗しました:", cancelError);
     }
   };
 
   const convertFile = async () => {
     if (!sourceFile || !sourceFormat) return;
 
+    const settingsKeyAtConversion = conversionSettingsKey;
     setIsConverting(true);
     setError(null);
 
@@ -324,20 +360,27 @@ function App() {
       const uint8Array =
         result instanceof Uint8Array ? result : new Uint8Array(result);
 
+      const sequenceKey = stem;
+      const sequence =
+        (outputConversionSequences.current.get(sequenceKey) ?? 0) + 1;
+      outputConversionSequences.current.set(sequenceKey, sequence);
+      const outputName = `${stem}_${sequence}.${extension}`;
+
       setConvertedFile(
-        new File([uint8Array as BlobPart], `${stem}.${extension}`, {
+        new File([uint8Array as BlobPart], outputName, {
           type: mimeTypes[convertedFormat][0] || `application/octet-stream`,
         }),
       );
+      setConvertedFileFormat(convertedFormat);
+      setConvertedSettingsKey(settingsKeyAtConversion);
     } catch (error) {
-      const errorMsg = String(error);
-      // キャンセルメッセージの判定
-      if (errorMsg.includes("cancelled")) {
+      const errorMessage = String(error);
+      if (errorMessage.includes("cancelled")) {
         setError("変換がキャンセルされました。");
       } else {
         setError(
           `Error during conversion: ${
-            error instanceof Error ? error.message : errorMsg
+            error instanceof Error ? error.message : errorMessage
           }`,
         );
       }
@@ -368,9 +411,8 @@ function App() {
 
   const handleFormatChange = (newFormat: Format) => {
     setConvertedFormat(newFormat);
-    setConvertedFile(null);
 
-    if (resizeEnabled && VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
+    if (mediaDimensions && VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
       setResizeWidth(normalizeVideoDimension(resizeWidth));
       setResizeHeight(normalizeVideoDimension(resizeHeight));
     }
@@ -423,7 +465,9 @@ function App() {
       return;
     }
     setResizeWidth(
-      isVideoOutput ? normalizeVideoDimension(value) : clampDimension(value),
+      isVideoOutput
+        ? normalizeVideoDimension(value)
+        : clampDimension(value),
     );
   };
 
@@ -434,21 +478,10 @@ function App() {
       return;
     }
     setResizeHeight(
-      isVideoOutput ? normalizeVideoDimension(value) : clampDimension(value),
+      isVideoOutput
+        ? normalizeVideoDimension(value)
+        : clampDimension(value),
     );
-  };
-
-  const handleResizeEnabledChange = (enabled: boolean) => {
-    setResizeEnabled(enabled);
-    if (!enabled || !mediaDimensions) return;
-
-    const normalized = normalizeOutputDimensions(
-      mediaDimensions.width,
-      mediaDimensions.height,
-    );
-    setResizeWidth(normalized.width);
-    setResizeHeight(normalized.height);
-    setLastChangedResizeAxis("width");
   };
 
   const handleAspectRatioLockedChange = (locked: boolean) => {
@@ -709,19 +742,19 @@ function App() {
             <button
               type="button"
               className="
-      mt-6.25
-      min-w-31.5
-      rounded-[9px]
-      border border-[#d76269]
-      bg-white
-      px-4
-      py-2.75
-      text-xs
-      font-bold
-      text-[#d76269]
-      transition duration-200
-      hover:bg-[#fff5f5]
-    "
+                mt-6.25
+                min-w-31.5
+                rounded-[9px]
+                border border-[#d76269]
+                bg-white
+                px-4
+                py-2.75
+                text-xs
+                font-bold
+                text-[#d76269]
+                transition duration-200
+                hover:bg-[#fff5f5]
+              "
               onClick={cancelConversion}
             >
               キャンセル
@@ -730,30 +763,34 @@ function App() {
             <button
               type="button"
               className="
-      mt-6.25
-      min-w-31.5
-      rounded-[9px]
-      border-0
-      bg-linear-to-br from-[#6177f6] to-[#7c69e9]
-      px-4
-      py-2.75
-      text-xs
-      font-bold
-      text-white
-      shadow-[0_5px_13px_rgba(93,111,232,0.22)]
-      transition duration-200
-      hover:-translate-y-px
-      hover:brightness-[1.04]
-      disabled:cursor-not-allowed
-      disabled:bg-[#c7ceda]
-      disabled:bg-none
-      disabled:shadow-none
-      disabled:transform-none
-    "
+                mt-6.25
+                min-w-31.5
+                rounded-[9px]
+                border-0
+                bg-linear-to-br from-[#6177f6] to-[#7c69e9]
+                px-4
+                py-2.75
+                text-xs
+                font-bold
+                text-white
+                shadow-[0_5px_13px_rgba(93,111,232,0.22)]
+                transition duration-200
+                hover:-translate-y-px
+                hover:brightness-[1.04]
+                disabled:cursor-not-allowed
+                disabled:bg-[#c7ceda]
+                disabled:bg-none
+                disabled:shadow-none
+                disabled:transform-none
+              "
               onClick={convertFile}
               disabled={!sourceFile}
             >
-              変換を開始
+              {conversionSettingsChanged
+                ? "設定を変更して再変換"
+                : convertedFile
+                  ? "もう一度変換"
+                  : "ファイルを変換"}
             </button>
           )}
         </div>
@@ -834,7 +871,7 @@ function App() {
               {convertedFile
                 ? `${Math.ceil(
                     convertedFile.size / 1024,
-                  ).toLocaleString()} KB ・ ${convertedFormat} 形式`
+                  ).toLocaleString()} KB ・ ${convertedFileFormat} 形式`
                 : "ファイルを追加して変換を開始してください"}
             </span>
 
@@ -912,14 +949,14 @@ function App() {
               <div className="flex flex-col gap-5">
                 <ResizeOptions
                   dimensions={mediaDimensions}
-                  enabled={resizeEnabled}
                   aspectRatioLocked={aspectRatioLocked}
+                  antiAliasing={antiAliasing}
                   width={resizeWidth}
                   height={resizeHeight}
                   isLoading={isProbingDimensions}
                   error={dimensionProbeError}
-                  onEnabledChange={handleResizeEnabledChange}
                   onAspectRatioLockedChange={handleAspectRatioLockedChange}
+                  onAntiAliasingChange={setAntiAliasing}
                   onWidthChange={handleResizeWidthChange}
                   onHeightChange={handleResizeHeightChange}
                 />
