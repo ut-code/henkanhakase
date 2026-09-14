@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
 import UploadIcon from "./assets/upload.svg";
+import { FormatDropdown } from "./components/FormatDropdown";
 import {
   IMAGE_FORMATS,
   VIDEO_FORMATS,
@@ -41,11 +42,12 @@ function normalizeVideoDimension(value: number): number {
 
 function apiErrorMessage(error: unknown, t: Translation): string {
   const value = typeof error === "string" ? tryParseError(error) : error;
-  const code = typeof value === "string"
-    ? value
-    : typeof value === "object" && value !== null && "code" in value
-      ? (value as { code: unknown }).code
-      : null;
+  const code =
+    typeof value === "string"
+      ? value
+      : typeof value === "object" && value !== null && "code" in value
+        ? (value as { code: unknown }).code
+        : null;
   const errorKeys = {
     conversion_cancelled: "error_conversion_cancelled",
     invalid_options: "error_invalid_options",
@@ -56,20 +58,26 @@ function apiErrorMessage(error: unknown, t: Translation): string {
     output_read_failed: "error_output_read_failed",
     probe_failed: "error_probe_failed",
   } as const;
-  if (typeof code === "string" && code in errorKeys) return t(errorKeys[code as keyof typeof errorKeys]);
+  if (typeof code === "string" && code in errorKeys)
+    return t(errorKeys[code as keyof typeof errorKeys]);
   return t("error_unexpected");
 }
 
 function tryParseError(error: string): unknown {
-  try { return JSON.parse(error); } catch { return error; }
+  try {
+    return JSON.parse(error);
+  } catch {
+    return error;
+  }
 }
 
 function App() {
   const { locale, setLocale, t } = useTranslation();
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [convertedFile, setConvertedFile] = useState<File | null>(null);
-  const [convertedFileFormat, setConvertedFileFormat] =
-    useState<Format | null>(null);
+  const [convertedFileFormat, setConvertedFileFormat] = useState<Format | null>(
+    null,
+  );
   const [convertedSettingsKey, setConvertedSettingsKey] = useState<
     string | null
   >(null);
@@ -123,21 +131,20 @@ function App() {
 
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const isVideoOutput = VIDEO_FORMATS.includes(
-    convertedFormat as VideoFormat,
-  );
+  const isVideoOutput = VIDEO_FORMATS.includes(convertedFormat as VideoFormat);
 
   // 詳細パネルの開閉ではなく、実際に変換結果へ影響する設定だけを比較する。
   const conversionSettingsKey = JSON.stringify({
     convertedFormat,
-    resize: !isAudioFormat(convertedFormat) && mediaDimensions
-      ? {
-          width: resizeWidth,
-          height: resizeHeight,
-          aspectRatioLocked,
-          antiAliasing,
-        }
-      : null,
+    resize:
+      !isAudioFormat(convertedFormat) && mediaDimensions
+        ? {
+            width: resizeWidth,
+            height: resizeHeight,
+            aspectRatioLocked,
+            antiAliasing,
+          }
+        : null,
     pngCompressionLevel,
     jpegQV,
     webpQV,
@@ -179,7 +186,12 @@ function App() {
     ) as Format | undefined;
 
     if (!detectedFormat) {
-      setError(t("unsupportedFormat", { type: file.type, formats: SUPPORTED_FORMATS.join(", ") }));
+      setError(
+        t("unsupportedFormat", {
+          type: file.type,
+          formats: SUPPORTED_FORMATS.join(", "),
+        }),
+      );
       return;
     }
 
@@ -481,9 +493,7 @@ function App() {
       return;
     }
     setResizeWidth(
-      isVideoOutput
-        ? normalizeVideoDimension(value)
-        : clampDimension(value),
+      isVideoOutput ? normalizeVideoDimension(value) : clampDimension(value),
     );
   };
 
@@ -494,9 +504,7 @@ function App() {
       return;
     }
     setResizeHeight(
-      isVideoOutput
-        ? normalizeVideoDimension(value)
-        : clampDimension(value),
+      isVideoOutput ? normalizeVideoDimension(value) : clampDimension(value),
     );
   };
 
@@ -571,7 +579,13 @@ function App() {
           {isConverting ? t("converting") : t("waiting")}
           <label className="flex items-center gap-1">
             <span className="sr-only">{t("language")}</span>
-            <select value={locale} onChange={(event) => setLocale(event.target.value as typeof locale)} className="rounded border border-[#dfe5ef] bg-white px-2 py-1 text-xs text-[#40506a]">
+            <select
+              value={locale}
+              onChange={(event) =>
+                setLocale(event.target.value as typeof locale)
+              }
+              className="rounded border border-[#dfe5ef] bg-white px-2 py-1 text-xs text-[#40506a]"
+            >
               <option value="ja">日本語</option>
               <option value="en">English</option>
             </select>
@@ -627,9 +641,7 @@ function App() {
                 {t("sourceTitle")}
               </h1>
 
-              <p className="m-0 text-xs text-[#99a4b5]">
-                {t("sourceHint")}
-              </p>
+              <p className="m-0 text-xs text-[#99a4b5]">{t("sourceHint")}</p>
             </div>
           </div>
 
@@ -714,33 +726,12 @@ function App() {
             {t("outputFormat")}
           </label>
 
-          <select
-            id="format"
+          <FormatDropdown
             value={convertedFormat}
+            options={availableOutputFormats}
             disabled={!sourceFile}
-            onChange={(event) =>
-              handleFormatChange(event.target.value as Format)
-            }
-            className="
-              w-31.5
-              rounded-[9px]
-              border border-[#dfe5ef]
-              bg-white
-              px-3.75
-              py-2.5
-              pr-7.75
-              text-[13px]
-              font-semibold
-              text-[#40506a]
-              outline-[#6578f7]
-            "
-          >
-            {availableOutputFormats.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
+            onChange={handleFormatChange}
+          />
 
           <img
             src={ArrowIcon}
@@ -851,9 +842,7 @@ function App() {
                 {t("outputTitle")}
               </h2>
 
-              <p className="m-0 text-xs text-[#99a4b5]">
-                {t("outputHint")}
-              </p>
+              <p className="m-0 text-xs text-[#99a4b5]">{t("outputHint")}</p>
             </div>
           </div>
 
@@ -1021,9 +1010,7 @@ function App() {
               />
             ) : (
               <p className="text-xs text-[#9aa6b7]">
-                {sourceFile
-                  ? t("noOptions")
-                  : t("chooseForOptions")}
+                {sourceFile ? t("noOptions") : t("chooseForOptions")}
               </p>
             )}
           </div>
