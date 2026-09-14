@@ -4,6 +4,7 @@ import type {
   AudioFormat,
 } from "../formats";
 import { isLossyAudioFormat } from "../formats";
+import { useTranslation } from "../i18n";
 
 export type AudioOptionsProps = {
   format: AudioFormat;
@@ -12,6 +13,7 @@ export type AudioOptionsProps = {
 };
 
 export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
+  const { t } = useTranslation();
   const update = <K extends keyof AudioCompressionOptions>(
     key: K,
     value: AudioCompressionOptions[K],
@@ -31,7 +33,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
             htmlFor="audio-sample-rate"
             className="text-xs font-semibold text-[#415166]"
           >
-            サンプルレート
+            {t("sampleRate")}
           </label>
           <select
             id="audio-sample-rate"
@@ -39,7 +41,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
             onChange={(e) => update("sampleRate", Number(e.target.value))}
             className="rounded-[9px] border border-[#dfe5ef] bg-white px-3 py-2 text-xs text-[#40506a] outline-[#6578f7]"
           >
-            <option value={0}>自動 (元ファイルと同じ)</option>
+            <option value={0}>{t("auto")}</option>
             <option value={22050}>22.05 kHz</option>
             <option value={44100}>44.1 kHz</option>
             <option value={48000}>48 kHz</option>
@@ -52,7 +54,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
             htmlFor="audio-channels"
             className="text-xs font-semibold text-[#415166]"
           >
-            チャンネル
+            {t("channels")}
           </label>
           <select
             id="audio-channels"
@@ -60,7 +62,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
             onChange={(e) => update("channels", Number(e.target.value))}
             className="rounded-[9px] border border-[#dfe5ef] bg-white px-3 py-2 text-xs text-[#40506a] outline-[#6578f7]"
           >
-            <option value={0}>自動 (元ファイルと同じ)</option>
+            <option value={0}>{t("auto")}</option>
             <option value={1}>1 ch (モノラル)</option>
             <option value={2}>2 ch (ステレオ)</option>
           </select>
@@ -77,7 +79,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
               htmlFor="audio-bit-depth"
               className="text-xs font-semibold text-[#415166]"
             >
-              ビット深度
+              {t("bitDepth")}
             </label>
             <select
               id="audio-bit-depth"
@@ -101,7 +103,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
                 htmlFor="flac-compression"
                 className="font-semibold text-[#415166]"
               >
-                圧縮レベル（可逆圧縮）
+                {t("flacCompression")}
               </label>
               <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
                 {options.flacCompressionLevel}
@@ -135,7 +137,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
                 htmlFor="vorbis-quality"
                 className="font-semibold text-[#415166]"
               >
-                音質（Vorbis）
+                {t("vorbisQuality")}
               </label>
               <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
                 {options.vorbisQuality}
@@ -166,7 +168,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
               htmlFor="audio-bitrate"
               className="text-xs font-semibold text-[#415166]"
             >
-              ビットレート
+              {t("bitrate")}
             </label>
             <select
               id="audio-bitrate"
@@ -185,7 +187,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
               <option value="320k">320 kbps (最高音質)</option>
             </select>
             <span className="text-[10px] text-[#9aa6b7]">
-              ビットレートが高いほど一般に音質とファイルサイズが増加します
+              {t("bitrateHint")}
             </span>
           </div>
         )}
