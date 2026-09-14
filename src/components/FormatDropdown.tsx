@@ -5,6 +5,7 @@ import VideoIcon from "../assets/video.svg";
 import AudioIcon from "../assets/audio.svg";
 import type { Format, ImageFormat, VideoFormat } from "../formats";
 import { IMAGE_FORMATS, VIDEO_FORMATS } from "../formats";
+import { type Locale, useTranslation } from "../i18n";
 
 export function FormatDropdown({
   value,
@@ -17,27 +18,79 @@ export function FormatDropdown({
   disabled?: boolean;
   onChange: (value: Format) => void;
 }) {
+  const { locale } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [tooltipFormat, setTooltipFormat] = useState<Format | null>(null);
 
-  const formatExplanations: Record<Format, string> = {
-    PNG: "可逆圧縮により画質劣化がなく透過処理に対応。色数の多い写真等では容量が肥大化しやすい。輪郭の明瞭さが求められるロゴやイラスト、図表の保存に適している。",
-    JPEG: "高い圧縮率によりファイルサイズを大幅に削減でき再生互換性に優れる。非可逆圧縮のため保存時に劣化が生じ透過には非対応。写真の保存やWeb用画像に適している。",
-    WebP: "JPEGやPNGより高い圧縮効率を持ち透過やアニメーションにも対応。古いブラウザやレガシーソフトウェアでは非対応。Webサイトの表示速度向上を目的とした画像配置に適している。",
-    GIF: "標準機能のみで簡易アニメーションを表示でき互換性が高い。最大256色に制限されグラデーションの再現性に劣る。短いループ画像や簡易アニメーションの共有に適している。",
-    MP4: "ほぼ全ての端末やブラウザで再生可能な互換性と高い圧縮効率を兼ね備える。コンテナ内のコーデック仕様に依存する。Web配信やSNS投稿、汎用的な動画共有に適している。",
-    WebM: "オープン規格でライセンス料が不要でありWeb環境での圧縮率と親和性に優れる。一部の動画編集ソフトや古い端末では非対応。Webサイト上の動画配置やHTML5配信に適している。",
-    AVI: "古い規格との互換性が高く非圧縮データも扱える。ファイルサイズが大きくなりやすくストリーミング配信には不向き。古いWindows環境やレガシーソフトでの動画編集に適している。",
-    MOV: "Apple環境との親和性が高く高画質コーデックを扱えるため編集用途に適する。WindowsやAndroid環境での互換性に劣る場合がある。MacやiOS上での動画編集や中間素材の保存に適している。",
-    MP3: "再生機器やOSを選ばない高い互換性を持つ。非可逆圧縮による高音域の欠落があり後発規格より圧縮効率が劣る。端末を問わず再生・共有したい音楽や音声コンテンツに適している。",
-    M4A: "MP3より圧縮効率に優れ同一ビットレートで高品質を維持できる。古いオーディオ機器では認識されない場合がある。Apple製品での音楽管理やボイスメモの保存に適している。",
-    AAC: "MP3より圧縮効率が高く低容量でも音質を維持しやすい。非可逆圧縮のため音質劣化を完全に防ぐことはできない。動画の音声トラックや配信向けオーディオに適している。",
-    WAV: "非圧縮のため音質の劣化が一切なく原音を忠実に保持できる。ファイルサイズが非常に大きい。音楽制作やナレーション録音、効果音などのマスター音源保存に適している。",
-    AIFF: "WAVと同様に非圧縮で原音を保持できApple環境との親和性が高い。容量が大きくWindows環境での互換性が劣る場合がある。Macでの音楽制作やスタジオ録音素材の管理に適している。",
-    FLAC: "可逆圧縮により音質劣化なしでWAVの約半分程度に容量を削減できる。非可逆圧縮よりは容量が大きく一部機器で非対応。ハイレゾ音源やCD音源のアーカイブ保存に適している。",
-    WMA: "低ビットレートでも比較的音声を保持できWindows環境との親和性が高い。Apple製品をはじめ非Windows環境での互換性が低い。Windows環境や対応機器での音声管理に適している。",
-    OGG: "ライセンス料不要のオープン規格でありMP3より高効率。Apple製品などの標準環境では再生非対応。ゲーム開発への組み込み音源やオープンな配信環境に適している。",
-    OPUS: "低遅延かつ低ビットレートでも高い音声品質を維持できる。古い再生機器やソフトウェアでは非対応の場合がある。リアルタイム通話やボイスチャット、通話ログの保存に適している。",
+  const formatExplanations: Record<Format, Record<Locale, string>> = {
+    PNG: {
+      ja: "可逆圧縮により画質劣化がなく透過処理に対応。色数の多い写真等では容量が肥大化しやすい。輪郭の明瞭さが求められるロゴやイラスト、図表の保存に適している。",
+      en: "Features lossless compression with no quality loss and supports transparency. File sizes can become large for complex images like photos. Best suited for logos, illustrations, and charts requiring crisp edges.",
+    },
+    JPEG: {
+      ja: "高い圧縮率によりファイルサイズを大幅に削減でき再生互換性に優れる。非可逆圧縮のため保存時に劣化が生じ透過には非対応。写真の保存やWeb用画像に適している。",
+      en: "Significantly reduces file sizes with high compression and excellent compatibility. Lossy compression causes degradation over saves, and transparency is not supported. Best suited for photographs and web images.",
+    },
+    WebP: {
+      ja: "JPEGやPNGより高い圧縮効率を持ち透過やアニメーションにも対応。古いブラウザやレガシーソフトウェアでは非対応。Webサイトの表示速度向上を目的とした画像配置に適している。",
+      en: "Offers higher compression efficiency than JPEG or PNG while supporting transparency and animation. May not be supported in older browsers or legacy software. Best suited for web images to improve loading speeds.",
+    },
+    GIF: {
+      ja: "標準機能のみで簡易アニメーションを表示でき互換性が高い。最大256色に制限されグラデーションの再現性に劣る。短いループ画像や簡易アニメーションの共有に適している。",
+      en: "Broadly compatible and displays simple animations natively without plugins. Limited to a maximum of 256 colors, making gradients appear degraded. Best suited for short looping animations and simple graphics.",
+    },
+    MP4: {
+      ja: "ほぼ全ての端末やブラウザで再生可能な互換性と高い圧縮効率を兼ね備える。コンテナ内のコーデック仕様に依存する。Web配信やSNS投稿、汎用的な動画共有に適している。",
+      en: "Combines broad compatibility across almost all devices and browsers with high compression efficiency. Playback depends on internal codec support. Best suited for web streaming, social media, and general video sharing.",
+    },
+    WebM: {
+      ja: "オープン規格でライセンス料が不要でありWeb環境での圧縮率と親和性に優れる。一部の動画編集ソフトや古い端末では非対応。Webサイト上の動画配置やHTML5配信に適している。",
+      en: "A royalty-free open format optimized for web use with strong compression. Not supported by some older devices or traditional video editors. Best suited for web embedding and HTML5 video streaming.",
+    },
+    AVI: {
+      ja: "古い規格との互換性が高く非圧縮データも扱える。ファイルサイズが大きくなりやすくストリーミング配信には不向き。古いWindows環境やレガシーソフトでの動画編集に適している。",
+      en: "Offers high compatibility with legacy systems and supports uncompressed data. File sizes tend to be very large and unsuited for streaming. Best suited for editing and playback in legacy Windows environments.",
+    },
+    MOV: {
+      ja: "Apple環境との親和性が高く高画質コーデックを扱えるため編集用途に適する。WindowsやAndroid環境での互換性に劣る場合がある。MacやiOS上での動画編集や中間素材の保存に適している。",
+      en: "Highly integrated with the Apple ecosystem and supports high-quality codecs ideal for editing. Compatibility may be limited on Windows or Android without extra tools. Best suited for video editing and mastering on macOS and iOS.",
+    },
+    MP3: {
+      ja: "再生機器やOSを選ばない高い互換性を持つ。非可逆圧縮による高音域の欠落があり後発規格より圧縮効率が劣る。端末を問わず再生・共有したい音楽や音声コンテンツに適している。",
+      en: "Universally compatible across virtually all devices and operating systems. Lossy compression drops high frequencies and has lower efficiency than newer codecs. Best suited for music and audio playback across any device.",
+    },
+    M4A: {
+      ja: "MP3より圧縮効率に優れ同一ビットレートで高品質を維持できる。古いオーディオ機器では認識されない場合がある。Apple製品での音楽管理やボイスメモの保存に適している。",
+      en: "Delivers better compression efficiency and audio quality than MP3 at identical bitrates. May not be recognized by older audio players. Best suited for managing music libraries and voice memos on Apple devices.",
+    },
+    AAC: {
+      ja: "MP3より圧縮効率が高く低容量でも音質を維持しやすい。非可逆圧縮のため音質劣化を完全に防ぐことはできない。動画の音声トラックや配信向けオーディオに適している。",
+      en: "Provides higher compression efficiency than MP3, maintaining clear quality at lower bitrates. As lossy compression, it cannot retain perfect original fidelity. Best suited for video audio tracks and streaming services.",
+    },
+    WAV: {
+      ja: "非圧縮のため音質の劣化が一切なく原音を忠実に保持できる。ファイルサイズが非常に大きい。音楽制作やナレーション録音、効果音などのマスター音源保存に適している。",
+      en: "Uncompressed audio with zero quality loss, preserving the original recording faithfully. Results in very large file sizes. Best suited for music production, studio recording, and master sound effects.",
+    },
+    AIFF: {
+      ja: "WAVと同様に非圧縮で原音を保持できApple環境との親和性が高い。容量が大きくWindows環境での互換性が劣る場合がある。Macでの音楽制作やスタジオ録音素材の管理に適している。",
+      en: "Preserves uncompressed original audio equivalent to WAV with native Apple support. Large file sizes and potentially limited compatibility on Windows. Best suited for music production and studio masters on macOS.",
+    },
+    FLAC: {
+      ja: "可逆圧縮により音質劣化なしでWAVの約半分程度に容量を削減できる。非可逆圧縮よりは容量が大きく一部機器で非対応。ハイレゾ音源やCD音源のアーカイブ保存に適している。",
+      en: "Lossless compression that reduces file sizes by roughly half compared to WAV without quality loss. Larger than lossy formats and unsupported on some legacy devices. Best suited for archiving high-resolution and CD audio.",
+    },
+    WMA: {
+      ja: "低ビットレートでも比較的音声を保持できWindows環境との親和性が高い。Apple製品をはじめ非Windows環境での互換性が低い。Windows環境や対応機器での音声管理に適している。",
+      en: "Maintains relatively good audio quality at low bitrates with native Windows support. Low compatibility on non-Windows platforms like Apple products. Best suited for playback on Windows and supported in-car audio systems.",
+    },
+    OGG: {
+      ja: "ライセンス料不要のオープン規格でありMP3より高効率。Apple製品などの標準環境では再生非対応。ゲーム開発への組み込み音源やオープンな配信環境に適している。",
+      en: "A royalty-free open format offering higher compression efficiency than MP3. Lacks native playback support on Apple platforms. Best suited for video game audio assets and open-source streaming.",
+    },
+    OPUS: {
+      ja: "低遅延かつ低ビットレートでも高い音声品質を維持できる。古い再生機器やソフトウェアでは非対応の場合がある。リアルタイム通話やボイスチャット、通話ログの保存に適している。",
+      en: "Delivers low latency and exceptional voice quality even at very low bitrates. May not be supported by older media players and legacy software. Best suited for real-time voice chat, VoIP, and call recording.",
+    },
   };
 
   return (
@@ -158,7 +211,11 @@ export function FormatDropdown({
                 </button>
                 <button
                   type="button"
-                  aria-label={`${item}の説明`}
+                  aria-label={
+                    locale === "ja"
+                      ? `${item}の説明`
+                      : `${item} description`
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
                     setTooltipFormat(tooltipFormat === item ? null : item);
@@ -205,7 +262,7 @@ export function FormatDropdown({
                   `}
                 >
                   <div className="absolute -left-1.25 top-1/2 size-2.5 -translate-y-1/2 rotate-45 border-b border-l border-[#dfe5ef] bg-white" />
-                  {formatExplanations[item]}
+                  {formatExplanations[item][locale]}
                 </div>
               </div>
             ))}
