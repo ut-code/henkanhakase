@@ -4,7 +4,7 @@ mod types;
 
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -16,18 +16,35 @@ use tauri_plugin_shell::ShellExt;
 pub use error::{ApiError, ConversionError, ErrorCode};
 pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
 
+/// 指定された一時ファイルを明示的に削除する関数
+pub fn remove_temp_file(path_str: &str) {
+    let path = PathBuf::from(path_str);
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+
+    // セキュリティ対策: 作成した一時ディレクトリ配下のファイルのみ削除を許可
+    if path.starts_with(&temp_dir) && path.exists() {
+        let _ = fs::remove_file(path);
+    }
+}
+
+/// アプリ起動時などに一時ディレクトリ内をすべて破棄・再作成する関数
+pub fn cleanup_temp_dir() {
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+    if temp_dir.exists() {
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+}
+
 pub async fn convert(
     app: &AppHandle,
     request: ConversionRequest,
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<String, ConversionError> {
-    // 1. 入力ファイルの存在チェック（絶対パス）
     let input_path = PathBuf::from(&request.input_path);
     if !input_path.exists() {
         return Err(ConversionError::new(ErrorCode::InputFileNotFound));
     }
 
-    // 2. 一時出力先ディレクトリの準備
     let temp_dir = std::env::temp_dir().join("henkanhakase");
     fs::create_dir_all(&temp_dir)
         .map_err(|_| ConversionError::new(ErrorCode::TempDirCreationFailed))?;
@@ -37,25 +54,22 @@ pub async fn convert(
         .map_err(|_| ConversionError::new(ErrorCode::TimestampFetchFailed))?
         .as_nanos();
 
-    // 出力先一時ファイルの絶対パス
-    let output_path = temp_dir.join(format!(
+    let output_file = TempFile::new(temp_dir.join(format!(
         "{}_{}.{}",
         request.stem,
         timestamp,
         request.output_format.extension()
-    ));
+    )));
 
-    // 3. FFmpeg 引数の組み立て (絶対パス同士で指定)
     let args = ffmpeg::build_args(
         &input_path,
-        &output_path,
+        output_file.path(),
         request.input_format,
         request.output_format,
         &request.options,
     )
     .map_err(|_| ConversionError::new(ErrorCode::InvalidOptions))?;
 
-    // 4. Sidecar (FFmpeg) の起動
     let (mut rx, child) = app
         .shell()
         .sidecar("ffmpeg")
@@ -64,12 +78,9 @@ pub async fn convert(
         .spawn()
         .map_err(|_| ConversionError::new(ErrorCode::FfmpegStartFailed))?;
 
-    // 5. キャンセル監視付きの非同期実行ループ
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
             let _ = child.kill();
-            // キャンセル時は一時ファイルを削除
-            let _ = fs::remove_file(&output_path);
             return Err(ConversionError::new(ErrorCode::ConversionCancelled));
         }
 
@@ -77,19 +88,18 @@ pub async fn convert(
             tokio::time::timeout(Duration::from_millis(100), rx.recv()).await
         {
             if payload.code != Some(0) {
-                let _ = fs::remove_file(&output_path);
                 return Err(ConversionError::new(ErrorCode::ConversionFailed));
             }
             break;
         }
     }
 
-    // 出力ファイルが正常に生成されたことを確認してパス文字列を返す
-    if !output_path.exists() {
+    if !output_file.path().exists() {
         return Err(ConversionError::new(ErrorCode::OutputFileNotGenerated));
     }
 
-    Ok(output_path.to_string_lossy().into_owned())
+    let final_path = output_file.disarm();
+    Ok(final_path.to_string_lossy().into_owned())
 }
 
 pub async fn probe_dimensions(
@@ -110,7 +120,7 @@ pub async fn probe_dimensions(
         .map_err(|_| ConversionError::new(ErrorCode::TimestampFetchFailed))?
         .as_nanos();
 
-    let probe_path = temp_dir.join(format!("probe_{}.png", timestamp));
+    let probe_file = TempFile::new(temp_dir.join(format!("probe_{}.png", timestamp)));
 
     let output = app
         .shell()
@@ -126,22 +136,18 @@ pub async fn probe_dimensions(
             "image2pipe".to_string(),
             "-vcodec".to_string(),
             "png".to_string(),
-            probe_path.to_string_lossy().into_owned(),
+            probe_file.path().to_string_lossy().into_owned(),
         ])
         .output()
         .await
         .map_err(|_| ConversionError::new(ErrorCode::ProbeFailed))?;
 
     if !output.status.success() {
-        let _ = fs::remove_file(&probe_path);
         return Err(ConversionError::new(ErrorCode::ProbeFailed));
     }
 
     let probe_data =
-        fs::read(&probe_path).map_err(|_| ConversionError::new(ErrorCode::ProbeFailed))?;
-
-    // 解析後、一時プローブ画像は不要のため即時削除
-    let _ = fs::remove_file(&probe_path);
+        fs::read(probe_file.path()).map_err(|_| ConversionError::new(ErrorCode::ProbeFailed))?;
 
     parse_png_dimensions(&probe_data)
 }
@@ -161,4 +167,33 @@ fn parse_png_dimensions(data: &[u8]) -> Result<MediaDimensions, ConversionError>
     }
 
     Ok(MediaDimensions { width, height })
+}
+
+/// スコープを抜けた際（エラー時やキャンセル時含む）に一時ファイルを自動削除するRAIIガード
+pub struct TempFile {
+    path: PathBuf,
+    keep: bool,
+}
+
+impl TempFile {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path, keep: false }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn disarm(mut self) -> PathBuf {
+        self.keep = true;
+        self.path.clone()
+    }
+}
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        if !self.keep && self.path.exists() {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
 }

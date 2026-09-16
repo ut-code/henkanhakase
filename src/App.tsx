@@ -6,25 +6,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
 import UploadIcon from "./assets/upload.svg";
-import {
-  IMAGE_FORMATS,
-  VIDEO_FORMATS,
-  AUDIO_FORMATS,
-  SUPPORTED_FORMATS,
-  type ImageFormat,
-  type VideoFormat,
-  type AudioFormat,
-  type Format,
-  type AudioCompressionOptions,
-  type MediaDimensions,
-  mimeTypes,
-  formatToExtension,
-  isAudioFormat,
-} from "./formats.ts";
 import { AudioOptions } from "./components/AudioOptions";
 import { ImageOptions } from "./components/ImageOptions";
-import { VideoOptions } from "./components/VideoOptions";
 import { ResizeOptions } from "./components/ResizeOptions";
+import { VideoOptions } from "./components/VideoOptions";
+import {
+  AUDIO_FORMATS,
+  type AudioCompressionOptions,
+  type AudioFormat,
+  type Format,
+  formatToExtension,
+  IMAGE_FORMATS,
+  type ImageFormat,
+  isAudioFormat,
+  type MediaDimensions,
+  mimeTypes,
+  SUPPORTED_FORMATS,
+  VIDEO_FORMATS,
+  type VideoFormat,
+} from "./formats.ts";
 import { type Translation, useTranslation } from "./i18n";
 
 const MAX_DIMENSION = 16384;
@@ -42,11 +42,12 @@ function normalizeVideoDimension(value: number): number {
 
 function apiErrorMessage(error: unknown, t: Translation): string {
   const value = typeof error === "string" ? tryParseError(error) : error;
-  const code = typeof value === "string"
-    ? value
-    : typeof value === "object" && value !== null && "code" in value
-      ? (value as { code: unknown }).code
-      : null;
+  const code =
+    typeof value === "string"
+      ? value
+      : typeof value === "object" && value !== null && "code" in value
+        ? (value as { code: unknown }).code
+        : null;
   const errorKeys = {
     conversion_cancelled: "error_conversion_cancelled",
     invalid_options: "error_invalid_options",
@@ -59,12 +60,17 @@ function apiErrorMessage(error: unknown, t: Translation): string {
     timestamp_fetch_failed: "error_timestamp_fetch_failed",
     output_file_not_generated: "error_output_file_not_generated",
   } as const;
-  if (typeof code === "string" && code in errorKeys) return t(errorKeys[code as keyof typeof errorKeys]);
+  if (typeof code === "string" && code in errorKeys)
+    return t(errorKeys[code as keyof typeof errorKeys]);
   return t("error_unexpected");
 }
 
 function tryParseError(error: string): unknown {
-  try { return JSON.parse(error); } catch { return error; }
+  try {
+    return JSON.parse(error);
+  } catch {
+    return error;
+  }
 }
 
 // パス文字列から拡張子を取得するヘルパー関数
@@ -97,8 +103,9 @@ function App() {
     null,
   );
 
-  const [convertedFileFormat, setConvertedFileFormat] =
-    useState<Format | null>(null);
+  const [convertedFileFormat, setConvertedFileFormat] = useState<Format | null>(
+    null,
+  );
   const [convertedSettingsKey, setConvertedSettingsKey] = useState<
     string | null
   >(null);
@@ -143,22 +150,20 @@ function App() {
       pcmBitDepth: 16,
     });
 
-
-  const isVideoOutput = VIDEO_FORMATS.includes(
-    convertedFormat as VideoFormat,
-  );
+  const isVideoOutput = VIDEO_FORMATS.includes(convertedFormat as VideoFormat);
 
   // 詳細パネルの開閉ではなく、実際に変換結果へ影響する設定だけを比較する。
   const conversionSettingsKey = JSON.stringify({
     convertedFormat,
-    resize: !isAudioFormat(convertedFormat) && mediaDimensions
-      ? {
-          width: resizeWidth,
-          height: resizeHeight,
-          aspectRatioLocked,
-          antiAliasing,
-        }
-      : null,
+    resize:
+      !isAudioFormat(convertedFormat) && mediaDimensions
+        ? {
+            width: resizeWidth,
+            height: resizeHeight,
+            aspectRatioLocked,
+            antiAliasing,
+          }
+        : null,
     pngCompressionLevel,
     jpegQV,
     webpQV,
@@ -170,7 +175,9 @@ function App() {
     audioCompression,
   });
   const conversionSettingsChanged =
-    convertedFilePath !== null && convertedFileName !== null && convertedSettingsKey !== conversionSettingsKey;
+    convertedFilePath !== null &&
+    convertedFileName !== null &&
+    convertedSettingsKey !== conversionSettingsKey;
 
   const availableOutputFormats = useMemo<Format[]>(() => {
     if (!sourceFormat) {
@@ -192,80 +199,99 @@ function App() {
     return [...IMAGE_FORMATS];
   }, [sourceFormat]);
 
-  // ファイルパスを受け取って内部状態を更新し、メディア情報の計測を行う共通処理
-  const processSelectedFilePath = useCallback(async (filePath: string) => {
-    const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
-    const detectedFormat = detectFormatFromPath(filePath);
-
-    if (!detectedFormat) {
-      setError(t("unsupportedFormat", { type: getExtensionFromPath(filePath), formats: SUPPORTED_FORMATS.join(", ") }));
-      return;
-    }
-
-    console.log(
-      `fileName: ${fileName},\nfilePath: ${filePath},\ndetectedFormat: ${detectedFormat}`,
-    );
-    setSourceFileName(fileName);
-    setSourceFilePath(filePath);
-    setSourceFileType(detectedFormat);
-
-    setConvertedFilePath(null);
-    setConvertedFileName(null);
-    setConvertedFileFormat(null);
-    setConvertedSettingsKey(null);
-    setError(null);
-    setMediaDimensions(null);
-    setDimensionProbeError(null);
-    setAspectRatioLocked(true);
-    setAntiAliasing(true);
-    setLastChangedResizeAxis("width");
-
-    const probeId = ++dimensionProbeId.current;
-
-    if (detectedFormat === "GIF") {
-      setConvertedFormat("MP4");
-    } else if (VIDEO_FORMATS.includes(detectedFormat as VideoFormat)) {
-      setConvertedFormat("GIF");
-    } else if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
-      setConvertedFormat("MP3");
-    } else {
-      setConvertedFormat("PNG");
-    }
-
-    if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
-      setIsProbingDimensions(false);
-      return;
-    }
-
-    setIsProbingDimensions(true);
-
-    try {
-      const dimensions = await invoke<MediaDimensions>(
-        "probe_media_dimensions",
-        {
-          request: {
-            inputPath: filePath,
-            inputFormat: formatToExtension(detectedFormat),
-          },
-        },
-      );
-
-      if (probeId !== dimensionProbeId.current) return;
-
-      setMediaDimensions(dimensions);
-      setResizeWidth(clampDimension(dimensions.width));
-      setResizeHeight(clampDimension(dimensions.height));
-    } catch (probeError) {
-      if (probeId !== dimensionProbeId.current) return;
-      setDimensionProbeError(
-        `サイズの取得に失敗しました: ${String(probeError)}`,
-      );
-    } finally {
-      if (probeId === dimensionProbeId.current) {
-        setIsProbingDimensions(false);
-      }
+  // 古い一時ファイルを破棄するヘルパー
+  const cleanupOldTempFile = useCallback((filePath: string | null) => {
+    if (filePath) {
+      invoke("cleanup_temp_file", { path: filePath }).catch(console.error);
     }
   }, []);
+
+  // ファイルパスを受け取って内部状態を更新し、メディア情報の計測を行う共通処理
+  const processSelectedFilePath = useCallback(
+    async (filePath: string) => {
+      const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
+      const detectedFormat = detectFormatFromPath(filePath);
+
+      if (!detectedFormat) {
+        setError(
+          t("unsupportedFormat", {
+            type: getExtensionFromPath(filePath),
+            formats: SUPPORTED_FORMATS.join(", "),
+          }),
+        );
+        return;
+      }
+
+      console.log(
+        `fileName: ${fileName},\nfilePath: ${filePath},\ndetectedFormat: ${detectedFormat}`,
+      );
+      setSourceFileName(fileName);
+      setSourceFilePath(filePath);
+      setSourceFileType(detectedFormat);
+
+      // 新しいファイルが選ばれたら旧一時ファイルを消去
+      setConvertedFilePath((prevPath) => {
+        cleanupOldTempFile(prevPath);
+        return null;
+      });
+      setConvertedFileName(null);
+      setConvertedFileFormat(null);
+      setConvertedSettingsKey(null);
+      setError(null);
+      setMediaDimensions(null);
+      setDimensionProbeError(null);
+      setAspectRatioLocked(true);
+      setAntiAliasing(true);
+      setLastChangedResizeAxis("width");
+
+      const probeId = ++dimensionProbeId.current;
+
+      if (detectedFormat === "GIF") {
+        setConvertedFormat("MP4");
+      } else if (VIDEO_FORMATS.includes(detectedFormat as VideoFormat)) {
+        setConvertedFormat("GIF");
+      } else if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
+        setConvertedFormat("MP3");
+      } else {
+        setConvertedFormat("PNG");
+      }
+
+      if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
+        setIsProbingDimensions(false);
+        return;
+      }
+
+      setIsProbingDimensions(true);
+
+      try {
+        const dimensions = await invoke<MediaDimensions>(
+          "probe_media_dimensions",
+          {
+            request: {
+              inputPath: filePath,
+              inputFormat: formatToExtension(detectedFormat),
+            },
+          },
+        );
+
+        if (probeId !== dimensionProbeId.current) return;
+
+        setMediaDimensions(dimensions);
+        setResizeWidth(clampDimension(dimensions.width));
+        setResizeHeight(clampDimension(dimensions.height));
+      } catch (probeError) {
+        if (probeId !== dimensionProbeId.current) return;
+        setDimensionProbeError(
+          `サイズの取得に失敗しました: ${String(probeError)}`,
+        );
+      } finally {
+        if (probeId === dimensionProbeId.current) {
+          setIsProbingDimensions(false);
+        }
+      }
+    },
+    [cleanupOldTempFile, t],
+  );
 
   // Tauri 公式のネイティブファイル選択ダイアログを開く
   const selectFileWithDialog = async () => {
@@ -447,6 +473,7 @@ function App() {
       outputConversionSequences.current.set(sequenceKey, sequence);
       const outputName = `${stem}_${sequence}.${extension}`;
 
+      cleanupOldTempFile(convertedFilePath);
 
       setConvertedFilePath(outputTempPath);
       setConvertedFileName(outputName);
@@ -480,8 +507,6 @@ function App() {
 
   const handleFormatChange = (newFormat: Format) => {
     setConvertedFormat(newFormat);
-    setConvertedFilePath(null);
-    setConvertedFileName(null);
 
     if (mediaDimensions && VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
       setResizeWidth(normalizeVideoDimension(resizeWidth));
@@ -536,9 +561,7 @@ function App() {
       return;
     }
     setResizeWidth(
-      isVideoOutput
-        ? normalizeVideoDimension(value)
-        : clampDimension(value),
+      isVideoOutput ? normalizeVideoDimension(value) : clampDimension(value),
     );
   };
 
@@ -549,9 +572,7 @@ function App() {
       return;
     }
     setResizeHeight(
-      isVideoOutput
-        ? normalizeVideoDimension(value)
-        : clampDimension(value),
+      isVideoOutput ? normalizeVideoDimension(value) : clampDimension(value),
     );
   };
 
@@ -621,7 +642,13 @@ function App() {
           {isConverting ? t("converting") : t("waiting")}
           <label className="flex items-center gap-1">
             <span className="sr-only">{t("language")}</span>
-            <select value={locale} onChange={(event) => setLocale(event.target.value as typeof locale)} className="rounded border border-[#dfe5ef] bg-white px-2 py-1 text-xs text-[#40506a]">
+            <select
+              value={locale}
+              onChange={(event) =>
+                setLocale(event.target.value as typeof locale)
+              }
+              className="rounded border border-[#dfe5ef] bg-white px-2 py-1 text-xs text-[#40506a]"
+            >
               <option value="ja">日本語</option>
               <option value="en">English</option>
             </select>
@@ -677,9 +704,7 @@ function App() {
                 {t("sourceTitle")}
               </h1>
 
-              <p className="m-0 text-xs text-[#99a4b5]">
-                {t("sourceHint")}
-              </p>
+              <p className="m-0 text-xs text-[#99a4b5]">{t("sourceHint")}</p>
             </div>
           </div>
 
@@ -891,9 +916,7 @@ function App() {
                 {t("outputTitle")}
               </h2>
 
-              <p className="m-0 text-xs text-[#99a4b5]">
-                {t("outputHint")}
-              </p>
+              <p className="m-0 text-xs text-[#99a4b5]">{t("outputHint")}</p>
             </div>
           </div>
 
@@ -1059,9 +1082,7 @@ function App() {
               />
             ) : (
               <p className="text-xs text-[#9aa6b7]">
-                {sourceFilePath
-                  ? t("noOptions")
-                  : t("chooseForOptions")}
+                {sourceFilePath ? t("noOptions") : t("chooseForOptions")}
               </p>
             )}
           </div>
