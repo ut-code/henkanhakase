@@ -1,5 +1,6 @@
 mod error;
 mod ffmpeg;
+mod progress;
 mod types;
 
 use std::{
@@ -11,9 +12,11 @@ use std::{
 };
 
 use tauri::AppHandle;
+use tauri::Emitter;
 use tauri_plugin_shell::ShellExt;
 
 pub use error::{ApiError, ConversionError, ErrorCode};
+use progress::{percentage, ConversionProgress};
 pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
 
 pub async fn convert(
@@ -33,6 +36,10 @@ pub async fn convert(
     fs::write(&input_path, request.data)
         .map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?;
 
+    let duration_ms = request
+        .duration_ms
+        .or(probe_duration_ms(app, &input_path).await);
+
     let args = ffmpeg::build_args(
         &input_path,
         &output_path,
@@ -41,6 +48,18 @@ pub async fn convert(
         &request.options,
     )
     .map_err(|_| ConversionError::new(ErrorCode::InvalidOptions))?;
+
+    let emit_progress = |progress, state| {
+        let _ = app.emit(
+            "conversion-progress",
+            ConversionProgress {
+                conversion_id: request.conversion_id.clone(),
+                progress,
+                state,
+            },
+        );
+    };
+    emit_progress(None, "running");
 
     // 1. .output() ではなく .spawn() を使用してプロセスを起動する
     let (mut rx, child) = app
@@ -61,18 +80,55 @@ pub async fn convert(
         }
 
         // FFmpeg からのイベント（出力ログや終了通知）を確認する
-        if let Ok(Some(tauri_plugin_shell::process::CommandEvent::Terminated(payload))) =
-            tokio::time::timeout(Duration::from_millis(100), rx.recv()).await
-        {
-            if payload.code != Some(0) {
-                return Err(ConversionError::new(ErrorCode::ConversionFailed));
+        if let Ok(Some(event)) = tokio::time::timeout(Duration::from_millis(100), rx.recv()).await {
+            match event {
+                tauri_plugin_shell::process::CommandEvent::Stdout(bytes) => {
+                    if let Ok(line) = std::str::from_utf8(&bytes) {
+                        if let Some(progress) = percentage(line.trim(), duration_ms) {
+                            emit_progress(Some(progress), "running");
+                        }
+                    }
+                }
+                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                    if payload.code != Some(0) {
+                        return Err(ConversionError::new(ErrorCode::ConversionFailed));
+                    }
+                    break;
+                }
+                _ => {}
             }
-            // 正常終了したためループを抜ける
-            break;
         }
     }
 
-    fs::read(&output_path).map_err(|_| ConversionError::new(ErrorCode::OutputReadFailed))
+    let output =
+        fs::read(&output_path).map_err(|_| ConversionError::new(ErrorCode::OutputReadFailed))?;
+    emit_progress(Some(100), "completed");
+    Ok(output)
+}
+
+async fn probe_duration_ms(app: &AppHandle, input_path: &Path) -> Option<u64> {
+    let output = app
+        .shell()
+        .sidecar("ffmpeg")
+        .ok()?
+        .args([
+            "-hide_banner".into(),
+            "-i".into(),
+            input_path.to_string_lossy().into_owned(),
+        ])
+        .output()
+        .await
+        .ok()?;
+    parse_duration_ms(&String::from_utf8_lossy(&output.stderr))
+}
+
+fn parse_duration_ms(output: &str) -> Option<u64> {
+    let value = output.split("Duration: ").nth(1)?.split(',').next()?.trim();
+    let mut fields = value.split(':');
+    let hours = fields.next()?.parse::<u64>().ok()?;
+    let minutes = fields.next()?.parse::<u64>().ok()?;
+    let seconds = fields.next()?.parse::<f64>().ok()?;
+    Some(((hours * 3_600 + minutes * 60) as f64 * 1_000.0 + seconds * 1_000.0).round() as u64)
 }
 
 pub async fn probe_dimensions(

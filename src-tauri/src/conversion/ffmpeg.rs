@@ -13,39 +13,52 @@ pub fn build_args(
     if (input_format.is_video() || input_format == FileFormat::Gif)
         && output_format == FileFormat::Gif
     {
-        return Ok(build_video_or_gif_to_gif_args(
+        return Ok(with_progress(build_video_or_gif_to_gif_args(
             input_path,
             output_path,
             options,
-        ));
+        )));
     }
 
     // GIF → 動画
     if input_format == FileFormat::Gif && output_format.is_video() {
-        return Ok(build_gif_to_video_args(
+        return Ok(with_progress(build_gif_to_video_args(
             input_path,
             output_path,
             output_format,
             options,
-        ));
+        )));
     }
 
     if input_format.is_video() && output_format.is_audio() {
-        return Ok(build_video_to_audio_args(input_path, output_path, options));
+        return Ok(with_progress(build_video_to_audio_args(
+            input_path,
+            output_path,
+            options,
+        )));
     }
 
     // 音声変換
     if output_format.is_audio() {
-        return build_audio_args(input_path, output_path, output_format, options);
+        return build_audio_args(input_path, output_path, output_format, options)
+            .map(with_progress);
     }
 
     // 既存の変換はこれまでと同様 FFmpeg に任せる
-    Ok(build_default_args(
+    Ok(with_progress(build_default_args(
         input_path,
         output_path,
         output_format,
         options,
-    ))
+    )))
+}
+
+fn with_progress(mut args: Vec<String>) -> Vec<String> {
+    args.splice(
+        0..0,
+        ["-progress".into(), "pipe:1".into(), "-nostats".into()],
+    );
+    args
 }
 
 fn build_default_args(
