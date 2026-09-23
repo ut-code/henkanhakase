@@ -1,95 +1,59 @@
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
-import { useMemo, useRef, useState } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { copyFile } from "@tauri-apps/plugin-fs";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
 import UploadIcon from "./assets/upload.svg";
+import { AudioOptions } from "./components/AudioOptions";
 import { FormatDropdown } from "./components/FormatDropdown";
+import { ImageOptions } from "./components/ImageOptions";
+import { ResizeOptions } from "./components/ResizeOptions";
+import { VideoOptions } from "./components/VideoOptions";
 import {
-  IMAGE_FORMATS,
-  VIDEO_FORMATS,
   AUDIO_FORMATS,
-  SUPPORTED_FORMATS,
-  type ImageFormat,
-  type VideoFormat,
+  type AudioCompressionOptions,
   type AudioFormat,
   type Format,
-  type AudioCompressionOptions,
-  type MediaDimensions,
-  mimeTypes,
   formatToExtension,
+  IMAGE_FORMATS,
+  type ImageFormat,
   isAudioFormat,
+  type MediaDimensions,
+  SUPPORTED_FORMATS,
+  VIDEO_FORMATS,
+  type VideoFormat,
 } from "./formats.ts";
-import { AudioOptions } from "./components/AudioOptions";
-import { ImageOptions } from "./components/ImageOptions";
-import { VideoOptions } from "./components/VideoOptions";
-import { ResizeOptions } from "./components/ResizeOptions";
-import { type Translation, useTranslation } from "./i18n";
-
-const MAX_DIMENSION = 16384;
-
-function clampDimension(value: number): number {
-  if (!Number.isFinite(value)) return 1;
-  return Math.min(MAX_DIMENSION, Math.max(1, Math.round(value)));
-}
-
-function normalizeVideoDimension(value: number): number {
-  const clamped = clampDimension(value);
-  if (clamped % 2 === 0) return clamped;
-  return Math.min(MAX_DIMENSION, clamped + 1);
-}
-
-function apiErrorMessage(error: unknown, t: Translation): string {
-  const value = typeof error === "string" ? tryParseError(error) : error;
-  const code =
-    typeof value === "string"
-      ? value
-      : typeof value === "object" && value !== null && "code" in value
-        ? (value as { code: unknown }).code
-        : null;
-  const errorKeys = {
-    conversion_cancelled: "error_conversion_cancelled",
-    invalid_options: "error_invalid_options",
-    input_write_failed: "error_input_write_failed",
-    ffmpeg_unavailable: "error_ffmpeg_unavailable",
-    ffmpeg_start_failed: "error_ffmpeg_start_failed",
-    conversion_failed: "error_conversion_failed",
-    output_read_failed: "error_output_read_failed",
-    probe_failed: "error_probe_failed",
-  } as const;
-  if (typeof code === "string" && code in errorKeys)
-    return t(errorKeys[code as keyof typeof errorKeys]);
-  return t("error_unexpected");
-}
-
-function tryParseError(error: string): unknown {
-  try {
-    return JSON.parse(error);
-  } catch {
-    return error;
-  }
-}
+import { useTranslation } from "./i18n";
+import {
+  clampDimension,
+  MAX_DIMENSION,
+  normalizeVideoDimension,
+} from "./utils/dimension.ts";
+import { apiErrorMessage } from "./utils/error.ts";
+import { detectFormatFromPath, getExtensionFromPath } from "./utils/path.ts";
 
 function App() {
   const { locale, setLocale, t } = useTranslation();
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [convertedFile, setConvertedFile] = useState<File | null>(null);
+  const [sourceFileName, setSourceFileName] = useState<string | null>(null);
+  const [sourceFilePath, setSourceFilePath] = useState<string | null>(null);
+  const [sourceFileType, setSourceFileType] = useState<Format | null>(null);
+
+  const [convertedFilePath, setConvertedFilePath] = useState<string | null>(
+    null,
+  );
+  const [convertedFileName, setConvertedFileName] = useState<string | null>(
+    null,
+  );
   const [convertedFileFormat, setConvertedFileFormat] = useState<Format | null>(
     null,
   );
   const [convertedSettingsKey, setConvertedSettingsKey] = useState<
     string | null
   >(null);
-  const sourceFormat = useMemo<Format | null>(
-    () =>
-      sourceFile
-        ? (Object.keys(mimeTypes).find((format) =>
-            mimeTypes[format as Format].includes(sourceFile.type),
-          ) as Format)
-        : null,
-    [sourceFile],
-  );
+
+  const sourceFormat = sourceFileType;
   const [convertedFormat, setConvertedFormat] = useState<Format>("PNG");
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [isConverting, setIsConverting] = useState(false);
@@ -129,8 +93,6 @@ function App() {
       pcmBitDepth: 16,
     });
 
-  const fileInput = useRef<HTMLInputElement>(null);
-
   const isVideoOutput = VIDEO_FORMATS.includes(convertedFormat as VideoFormat);
 
   // 詳細パネルの開閉ではなく、実際に変換結果へ影響する設定だけを比較する。
@@ -156,7 +118,9 @@ function App() {
     audioCompression,
   });
   const conversionSettingsChanged =
-    convertedFile !== null && convertedSettingsKey !== conversionSettingsKey;
+    convertedFilePath !== null &&
+    convertedFileName !== null &&
+    convertedSettingsKey !== conversionSettingsKey;
 
   const availableOutputFormats = useMemo<Format[]>(() => {
     if (!sourceFormat) {
@@ -178,81 +142,137 @@ function App() {
     return [...IMAGE_FORMATS];
   }, [sourceFormat]);
 
-  const selectFile = async (file?: File) => {
-    if (!file) return;
-
-    const detectedFormat = Object.keys(mimeTypes).find((format) =>
-      mimeTypes[format as Format].includes(file.type),
-    ) as Format | undefined;
-
-    if (!detectedFormat) {
-      setError(
-        t("unsupportedFormat", {
-          type: file.type,
-          formats: SUPPORTED_FORMATS.join(", "),
-        }),
-      );
-      return;
+  // 古い一時ファイルを破棄するヘルパー
+  const cleanupOldTempFile = useCallback((filePath: string | null) => {
+    if (filePath) {
+      invoke("cleanup_temp_file", { path: filePath }).catch(console.error);
     }
+  }, []);
 
-    setSourceFile(file);
-    setConvertedFile(null);
-    setConvertedFileFormat(null);
-    setConvertedSettingsKey(null);
-    setError(null);
-    setMediaDimensions(null);
-    setDimensionProbeError(null);
-    setAspectRatioLocked(true);
-    setAntiAliasing(true);
-    setLastChangedResizeAxis("width");
+  // ファイルパスを受け取って内部状態を更新し、メディア情報の計測を行う共通処理
+  const processSelectedFilePath = useCallback(
+    async (filePath: string) => {
+      const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
+      const detectedFormat = detectFormatFromPath(filePath);
 
-    const probeId = ++dimensionProbeId.current;
-
-    if (detectedFormat === "GIF") {
-      setConvertedFormat("MP4");
-    } else if (VIDEO_FORMATS.includes(detectedFormat as VideoFormat)) {
-      setConvertedFormat("GIF");
-    } else if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
-      setConvertedFormat("MP3");
-    } else {
-      setConvertedFormat("PNG");
-    }
-
-    if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
-      setIsProbingDimensions(false);
-      return;
-    }
-
-    setIsProbingDimensions(true);
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const dimensions = await invoke<MediaDimensions>(
-        "probe_media_dimensions",
-        {
-          request: {
-            data: Array.from(new Uint8Array(buffer)),
-            inputFormat: formatToExtension(detectedFormat),
-          },
-        },
-      );
-
-      if (probeId !== dimensionProbeId.current) return;
-
-      setMediaDimensions(dimensions);
-      setResizeWidth(clampDimension(dimensions.width));
-      setResizeHeight(clampDimension(dimensions.height));
-    } catch (probeError) {
-      if (probeId !== dimensionProbeId.current) return;
-      setDimensionProbeError(
-        `サイズの取得に失敗しました: ${String(probeError)}`,
-      );
-    } finally {
-      if (probeId === dimensionProbeId.current) {
-        setIsProbingDimensions(false);
+      if (!detectedFormat) {
+        setError(
+          t("unsupportedFormat", {
+            type: getExtensionFromPath(filePath),
+            formats: SUPPORTED_FORMATS.join(", "),
+          }),
+        );
+        return;
       }
+
+      console.log(
+        `fileName: ${fileName},\nfilePath: ${filePath},\ndetectedFormat: ${detectedFormat}`,
+      );
+      setSourceFileName(fileName);
+      setSourceFilePath(filePath);
+      setSourceFileType(detectedFormat);
+
+      // 新しいファイルが選ばれたら旧一時ファイルを消去
+      setConvertedFilePath((prevPath) => {
+        cleanupOldTempFile(prevPath);
+        return null;
+      });
+      setConvertedFileName(null);
+      setConvertedFileFormat(null);
+      setConvertedSettingsKey(null);
+      setError(null);
+      setMediaDimensions(null);
+      setDimensionProbeError(null);
+      setAspectRatioLocked(true);
+      setAntiAliasing(true);
+      setLastChangedResizeAxis("width");
+
+      const probeId = ++dimensionProbeId.current;
+
+      if (detectedFormat === "GIF") {
+        setConvertedFormat("MP4");
+      } else if (VIDEO_FORMATS.includes(detectedFormat as VideoFormat)) {
+        setConvertedFormat("GIF");
+      } else if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
+        setConvertedFormat("MP3");
+      } else {
+        setConvertedFormat("PNG");
+      }
+
+      if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
+        setIsProbingDimensions(false);
+        return;
+      }
+
+      setIsProbingDimensions(true);
+
+      try {
+        const dimensions = await invoke<MediaDimensions>(
+          "probe_media_dimensions",
+          {
+            request: {
+              inputPath: filePath,
+              inputFormat: formatToExtension(detectedFormat),
+            },
+          },
+        );
+
+        if (probeId !== dimensionProbeId.current) return;
+
+        setMediaDimensions(dimensions);
+        setResizeWidth(clampDimension(dimensions.width));
+        setResizeHeight(clampDimension(dimensions.height));
+      } catch (probeError) {
+        if (probeId !== dimensionProbeId.current) return;
+        setDimensionProbeError(
+          `サイズの取得に失敗しました: ${String(probeError)}`,
+        );
+      } finally {
+        if (probeId === dimensionProbeId.current) {
+          setIsProbingDimensions(false);
+        }
+      }
+    },
+    [cleanupOldTempFile, t],
+  );
+
+  // Tauri 公式のネイティブファイル選択ダイアログを開く
+  const selectFileWithDialog = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        directory: false,
+      });
+
+      if (selected && typeof selected === "string") {
+        await processSelectedFilePath(selected);
+      }
+    } catch (err) {
+      setError(t("fileSelectError", { error: String(err) }));
     }
   };
+
+  // Tauri の Drag & Drop イベントリスナーを登録
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    const setupDragDrop = async () => {
+      unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+        if (event.payload.type === "drop") {
+          const paths = event.payload.paths;
+          if (paths && paths.length > 0) {
+            processSelectedFilePath(paths[0]);
+          }
+        }
+      });
+    };
+
+    setupDragDrop();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [processSelectedFilePath]);
 
   const buildConversionOptions = () => {
     const resizeOptions =
@@ -304,7 +324,6 @@ function App() {
         };
       default:
         if (isAudioFormat(convertedFormat)) {
-          // sampleRateやchannelsが 0 (Auto) の場合は undefined にし、Rust/FFmpeg側で引数を省略できるようにする
           const commonAudio = {
             sampleRate:
               audioCompression.sampleRate > 0
@@ -369,7 +388,7 @@ function App() {
   };
 
   const convertFile = async () => {
-    if (!sourceFile || !sourceFormat) return;
+    if (!sourceFilePath || !sourceFileName || !sourceFormat) return;
 
     const settingsKeyAtConversion = conversionSettingsKey;
     setIsConverting(true);
@@ -378,24 +397,18 @@ function App() {
     try {
       const extension = formatToExtension(convertedFormat);
       const inputExtension = formatToExtension(sourceFormat);
+      const stem = sourceFileName.replace(/\.[^.]+$/, "");
 
-      const stem = sourceFile.name.replace(/\.[^.]+$/, "");
-
-      const buffer = await sourceFile.arrayBuffer();
-
-      const result = await invoke<number[] | Uint8Array>("convert_file", {
+      // Rust側へファイルの絶対パスを引数として渡し、出力された一時ファイルの絶対パスを受け取る
+      const outputTempPath = await invoke<string>("convert_file", {
         request: {
-          data: Array.from(new Uint8Array(buffer)),
+          inputPath: sourceFilePath,
           stem,
           inputFormat: inputExtension,
           outputFormat: extension,
-
           options: buildConversionOptions(),
         },
       });
-
-      const uint8Array =
-        result instanceof Uint8Array ? result : new Uint8Array(result);
 
       const sequenceKey = stem;
       const sequence =
@@ -403,11 +416,10 @@ function App() {
       outputConversionSequences.current.set(sequenceKey, sequence);
       const outputName = `${stem}_${sequence}.${extension}`;
 
-      setConvertedFile(
-        new File([uint8Array as BlobPart], outputName, {
-          type: mimeTypes[convertedFormat][0] || `application/octet-stream`,
-        }),
-      );
+      cleanupOldTempFile(convertedFilePath);
+
+      setConvertedFilePath(outputTempPath);
+      setConvertedFileName(outputName);
       setConvertedFileFormat(convertedFormat);
       setConvertedSettingsKey(settingsKeyAtConversion);
     } catch (error) {
@@ -418,20 +430,19 @@ function App() {
   };
 
   const saveFile = async () => {
-    if (!convertedFile) return;
+    if (!convertedFilePath || !convertedFileName) return;
 
     try {
-      const filePath = await save({
-        defaultPath: convertedFile.name,
+      const destinationPath = await save({
+        defaultPath: convertedFileName,
       });
 
-      if (!filePath) {
+      if (!destinationPath) {
         return;
       }
 
-      const buffer = await convertedFile.arrayBuffer();
-
-      await writeFile(filePath, new Uint8Array(buffer));
+      // 追記・コピー処理（Tauri FSのcopyFileでパス指定転送）
+      await copyFile(convertedFilePath, destinationPath);
     } catch (error) {
       console.error(t("saveFailed"), error);
     }
@@ -516,11 +527,6 @@ function App() {
         lastChangedResizeAxis,
       );
     }
-  };
-
-  const handleDrop = (event: React.DragEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    selectFile(event.dataTransfer.files[0]);
   };
 
   return (
@@ -662,9 +668,7 @@ function App() {
 
               max-[980px]:h-57.5
             "
-            onClick={() => fileInput.current?.click()}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={handleDrop}
+            onClick={selectFileWithDialog}
           >
             <span
               className="
@@ -688,21 +692,13 @@ function App() {
                 text-[#3c4a60]
               "
             >
-              {sourceFile?.name ?? t("dropFile")}
+              {sourceFileName ?? t("dropFile")}
             </strong>
 
             <span className="text-xs">
-              {sourceFile ? t("chooseAnother") : t("chooseFile")}
+              {sourceFilePath ? t("chooseAnother") : t("chooseFile")}
             </span>
           </button>
-
-          <input
-            ref={fileInput}
-            type="file"
-            hidden
-            accept={[...Object.values(mimeTypes).flat()].join(",")}
-            onChange={(event) => selectFile(event.target.files?.[0])}
-          />
 
           {error && (
             <p className="my-2 text-[11px] leading-[1.6] text-[#d76269]">
@@ -729,7 +725,7 @@ function App() {
           <FormatDropdown
             value={convertedFormat}
             options={availableOutputFormats}
-            disabled={!sourceFile}
+            disabled={!sourceFilePath}
             onChange={handleFormatChange}
           />
 
@@ -746,7 +742,7 @@ function App() {
 
               max-[980px]:absolute
               max-[980px]:bottom-0
-              ${!sourceFile ? "invisible" : ""}
+              ${!sourceFilePath ? "invisible" : ""}
             `}
           >
             {t("convertTo", { format: convertedFormat })}
@@ -798,11 +794,11 @@ function App() {
                 disabled:transform-none
               "
               onClick={convertFile}
-              disabled={!sourceFile}
+              disabled={!sourceFilePath}
             >
               {conversionSettingsChanged
                 ? t("reconvertChanged")
-                : convertedFile
+                : convertedFileName && convertedFilePath
                   ? t("convertAgain")
                   : t("convert")}
             </button>
@@ -849,7 +845,7 @@ function App() {
           <div
             className={[
               "flex h-70 flex-col items-center justify-center rounded-[14px] border bg-[#fcfdff] p-5.5 text-center text-[#8e9aab] max-[980px]:h-57.5",
-              convertedFile
+              convertedFilePath
                 ? "border-[#dce3ff] bg-[#fbfcff]"
                 : "border-[#edf0f5]",
             ].join(" ")}
@@ -876,18 +872,16 @@ function App() {
                 text-[#3c4a60]
               "
             >
-              {convertedFile?.name ?? t("noOutput")}
+              {convertedFileName ?? t("noOutput")}
             </strong>
 
             <span className="text-xs">
-              {convertedFile
-                ? `${Math.ceil(
-                    convertedFile.size / 1024,
-                  ).toLocaleString()} KB ・ ${t("formatLabel", { format: convertedFileFormat ?? "" })}`
+              {convertedFilePath
+                ? `${t("formatLabel", { format: convertedFileFormat ?? "" })}`
                 : t("addAndConvert")}
             </span>
 
-            {convertedFile && (
+            {convertedFilePath && (
               <button
                 type="button"
                 className="
@@ -957,7 +951,7 @@ function App() {
 
         {detailsOpen && (
           <div className="border-t border-[#edf0f5] px-5.5 py-4">
-            {sourceFile && !isAudioFormat(convertedFormat) ? (
+            {sourceFilePath && !isAudioFormat(convertedFormat) ? (
               <div className="flex flex-col gap-5">
                 <ResizeOptions
                   dimensions={mediaDimensions}
@@ -1010,7 +1004,7 @@ function App() {
               />
             ) : (
               <p className="text-xs text-[#9aa6b7]">
-                {sourceFile ? t("noOptions") : t("chooseForOptions")}
+                {sourceFilePath ? t("noOptions") : t("chooseForOptions")}
               </p>
             )}
           </div>

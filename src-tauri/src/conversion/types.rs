@@ -80,6 +80,7 @@ impl FileFormat {
     pub fn is_video(self) -> bool {
         matches!(self, Self::Mp4 | Self::Webm | Self::Avi | Self::Mov)
     }
+
     pub fn is_audio(self) -> bool {
         matches!(
             self,
@@ -250,20 +251,6 @@ pub struct ConversionOptions {
     pub audio: Option<AudioOptions>,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaProbeRequest {
-    pub data: Vec<u8>,
-    pub input_format: FileFormat,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaDimensions {
-    pub width: u32,
-    pub height: u32,
-}
-
 impl ConversionOptions {
     pub fn validate(&self, output_format: FileFormat) -> Result<(), String> {
         if let Some(width) = self.width {
@@ -335,8 +322,26 @@ impl ConversionOptions {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MediaProbeRequest {
+    /// 入力ファイルの絶対パス
+    pub input_path: String,
+    pub _input_format: FileFormat,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaDimensions {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConversionRequest {
-    pub data: Vec<u8>,
+    /// 入力ファイルの絶対パス
+    pub input_path: String,
+    /// ファイル名 (拡張子なし)
+    pub stem: String,
     pub input_format: FileFormat,
     pub output_format: FileFormat,
 

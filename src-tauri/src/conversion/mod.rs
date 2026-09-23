@@ -16,33 +16,60 @@ use tauri_plugin_shell::ShellExt;
 pub use error::{ApiError, ConversionError, ErrorCode};
 pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
 
+/// 指定された一時ファイルを明示的に削除する関数
+pub fn remove_temp_file(path_str: &str) {
+    let path = PathBuf::from(path_str);
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+
+    // セキュリティ対策: 作成した一時ディレクトリ配下のファイルのみ削除を許可
+    if path.starts_with(&temp_dir) && path.exists() {
+        let _ = fs::remove_file(path);
+    }
+}
+
+/// アプリ起動時などに一時ディレクトリ内をすべて破棄・再作成する関数
+pub fn cleanup_temp_dir() {
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+    if temp_dir.exists() {
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+}
+
 pub async fn convert(
     app: &AppHandle,
     request: ConversionRequest,
     cancel_flag: Arc<AtomicBool>,
-) -> Result<Vec<u8>, ConversionError> {
-    let workspace = TempWorkspace::new()?;
+) -> Result<String, ConversionError> {
+    let input_path = PathBuf::from(&request.input_path);
+    if !input_path.exists() {
+        return Err(ConversionError::new(ErrorCode::InputFileNotFound));
+    }
 
-    let input_path = workspace
-        .path()
-        .join(format!("input.{}", request.input_format.extension()));
-    let output_path = workspace
-        .path()
-        .join(format!("output.{}", request.output_format.extension()));
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|_| ConversionError::new(ErrorCode::TempDirCreationFailed))?;
 
-    fs::write(&input_path, request.data)
-        .map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| ConversionError::new(ErrorCode::TimestampFetchFailed))?
+        .as_nanos();
+
+    let output_file = TempFile::new(temp_dir.join(format!(
+        "{}_{}.{}",
+        request.stem,
+        timestamp,
+        request.output_format.extension()
+    )));
 
     let args = ffmpeg::build_args(
         &input_path,
-        &output_path,
+        output_file.path(),
         request.input_format,
         request.output_format,
         &request.options,
     )
     .map_err(|_| ConversionError::new(ErrorCode::InvalidOptions))?;
 
-    // 1. .output() ではなく .spawn() を使用してプロセスを起動する
     let (mut rx, child) = app
         .shell()
         .sidecar("ffmpeg")
@@ -51,48 +78,56 @@ pub async fn convert(
         .spawn()
         .map_err(|_| ConversionError::new(ErrorCode::FfmpegStartFailed))?;
 
-    // 2. FFmpeg の実行完了、またはキャンセルフラグの変更を非同期にループ監視する
     loop {
-        // フロントエンドから cancel_conversion が呼ばれたかをチェック
         if cancel_flag.load(Ordering::Relaxed) {
-            // FFmpeg プロセスを強制終了する
             let _ = child.kill();
             return Err(ConversionError::new(ErrorCode::ConversionCancelled));
         }
 
-        // FFmpeg からのイベント（出力ログや終了通知）を確認する
         if let Ok(Some(tauri_plugin_shell::process::CommandEvent::Terminated(payload))) =
             tokio::time::timeout(Duration::from_millis(100), rx.recv()).await
         {
             if payload.code != Some(0) {
                 return Err(ConversionError::new(ErrorCode::ConversionFailed));
             }
-            // 正常終了したためループを抜ける
             break;
         }
     }
 
-    fs::read(&output_path).map_err(|_| ConversionError::new(ErrorCode::OutputReadFailed))
+    if !output_file.path().exists() {
+        return Err(ConversionError::new(ErrorCode::OutputFileNotGenerated));
+    }
+
+    let final_path = output_file.disarm();
+    Ok(final_path.to_string_lossy().into_owned())
 }
 
 pub async fn probe_dimensions(
     app: &AppHandle,
     request: MediaProbeRequest,
 ) -> Result<MediaDimensions, ConversionError> {
-    let workspace = TempWorkspace::new()?;
-    let input_path = workspace
-        .path()
-        .join(format!("input.{}", request.input_format.extension()));
-    let probe_path = workspace.path().join("probe.png");
+    let input_path = PathBuf::from(&request.input_path);
+    if !input_path.exists() {
+        return Err(ConversionError::new(ErrorCode::InputFileNotFound));
+    }
 
-    fs::write(&input_path, request.data)
-        .map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?;
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|_| ConversionError::new(ErrorCode::TempDirCreationFailed))?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| ConversionError::new(ErrorCode::TimestampFetchFailed))?
+        .as_nanos();
+
+    let probe_file = TempFile::new(temp_dir.join(format!("probe_{}.png", timestamp)));
 
     let output = app
         .shell()
         .sidecar("ffmpeg")
         .map_err(|_| ConversionError::new(ErrorCode::FfmpegUnavailable))?
         .args([
+            "-y".to_string(),
             "-i".to_string(),
             input_path.to_string_lossy().into_owned(),
             "-frames:v".to_string(),
@@ -101,7 +136,7 @@ pub async fn probe_dimensions(
             "image2pipe".to_string(),
             "-vcodec".to_string(),
             "png".to_string(),
-            probe_path.to_string_lossy().into_owned(),
+            probe_file.path().to_string_lossy().into_owned(),
         ])
         .output()
         .await
@@ -112,7 +147,7 @@ pub async fn probe_dimensions(
     }
 
     let probe_data =
-        fs::read(&probe_path).map_err(|_| ConversionError::new(ErrorCode::ProbeFailed))?;
+        fs::read(probe_file.path()).map_err(|_| ConversionError::new(ErrorCode::ProbeFailed))?;
 
     parse_png_dimensions(&probe_data)
 }
@@ -134,33 +169,31 @@ fn parse_png_dimensions(data: &[u8]) -> Result<MediaDimensions, ConversionError>
     Ok(MediaDimensions { width, height })
 }
 
-struct TempWorkspace {
+/// スコープを抜けた際（エラー時やキャンセル時含む）に一時ファイルを自動削除するRAIIガード
+pub struct TempFile {
     path: PathBuf,
+    keep: bool,
 }
 
-impl TempWorkspace {
-    fn new() -> Result<Self, ConversionError> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?
-            .as_nanos();
-
-        let name = format!("henkanhakase-{}-{timestamp}", std::process::id());
-
-        let path = std::env::temp_dir().join(name);
-
-        fs::create_dir_all(&path).map_err(|_| ConversionError::new(ErrorCode::InputWriteFailed))?;
-
-        Ok(Self { path })
+impl TempFile {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path, keep: false }
     }
 
-    fn path(&self) -> &Path {
+    pub fn path(&self) -> &Path {
         &self.path
     }
+
+    pub fn disarm(mut self) -> PathBuf {
+        self.keep = true;
+        self.path.clone()
+    }
 }
 
-impl Drop for TempWorkspace {
+impl Drop for TempFile {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
+        if !self.keep && self.path.exists() {
+            let _ = fs::remove_file(&self.path);
+        }
     }
 }
