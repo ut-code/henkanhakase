@@ -104,6 +104,38 @@ function App() {
 
   const isVideoOutput = VIDEO_FORMATS.includes(convertedFormat as VideoFormat);
 
+  // 選択されているファイルの種別（画像・動画・音声）の混在チェック
+  const mediaTypes = useMemo(() => {
+    let hasImage = false;
+    let hasVideo = false;
+    let hasAudio = false;
+
+    for (const file of sourceFiles) {
+      if (
+        file.format === "GIF" ||
+        VIDEO_FORMATS.includes(file.format as VideoFormat)
+      ) {
+        hasVideo = true;
+      } else if (AUDIO_FORMATS.includes(file.format as AudioFormat)) {
+        hasAudio = true;
+      } else {
+        hasImage = true;
+      }
+    }
+
+    return { hasImage, hasVideo, hasAudio };
+  }, [sourceFiles]);
+
+  const isMixedMediaType = useMemo(() => {
+    const activeTypes = [
+      mediaTypes.hasImage,
+      mediaTypes.hasVideo,
+      mediaTypes.hasAudio,
+    ].filter(Boolean).length;
+
+    return activeTypes > 1;
+  }, [mediaTypes]);
+
   // 詳細パネルの開閉ではなく、実際に変換結果へ影響する設定だけを比較する。
   const conversionSettingsKey = JSON.stringify({
     convertedFormat,
@@ -132,28 +164,12 @@ function App() {
 
   // 選択されているすべてのファイルに対応する出力フォーマット候補を出す
   const availableOutputFormats = useMemo<Format[]>(() => {
-    if (sourceFiles.length === 0) return [];
+    if (sourceFiles.length === 0 || isMixedMediaType) return [];
 
-    let hasImage = false;
-    let hasVideo = false;
-    let hasAudio = false;
-    let hasGif = false;
-
-    for (const file of sourceFiles) {
-      if (file.format === "GIF") hasGif = true;
-      else if (VIDEO_FORMATS.includes(file.format as VideoFormat))
-        hasVideo = true;
-      else if (AUDIO_FORMATS.includes(file.format as AudioFormat))
-        hasAudio = true;
-      else hasImage = true;
-    }
-
-    if (hasVideo || hasGif) return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
-    if (hasAudio) return [...AUDIO_FORMATS];
-    if (hasImage) return [...IMAGE_FORMATS];
-
+    if (mediaTypes.hasVideo) return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
+    if (mediaTypes.hasAudio) return [...AUDIO_FORMATS];
     return [...IMAGE_FORMATS];
-  }, [sourceFiles]);
+  }, [sourceFiles, isMixedMediaType, mediaTypes]);
 
   // 古い一時ファイルを破棄するヘルパー
   const cleanupOldTempFiles = useCallback((results: ConvertedResultItem[]) => {
@@ -467,7 +483,7 @@ function App() {
 
   // 複数ファイルを一括で順次変換する処理
   const convertFiles = async () => {
-    if (sourceFiles.length === 0) return;
+    if (sourceFiles.length === 0 || isMixedMediaType) return;
 
     const settingsKeyAtConversion = conversionSettingsKey;
     setIsConverting(true);
@@ -881,6 +897,12 @@ function App() {
             </div>
           )}
 
+          {isMixedMediaType && (
+            <p className="my-2 whitespace-pre-line text-[11px] leading-[1.6] text-[#d76269]">
+              画像・動画・音声ファイルが混ざっています。同じ種類のファイルのみ選択してください。
+            </p>
+          )}
+
           {error && (
             <p className="my-2 whitespace-pre-line text-[11px] leading-[1.6] text-[#d76269]">
               {error}
@@ -906,7 +928,7 @@ function App() {
           <FormatDropdown
             value={convertedFormat}
             options={availableOutputFormats}
-            disabled={sourceFiles.length === 0}
+            disabled={sourceFiles.length === 0 || isMixedMediaType}
             onChange={handleFormatChange}
           />
 
@@ -923,7 +945,7 @@ function App() {
 
               max-[980px]:absolute
               max-[980px]:bottom-0
-              ${sourceFiles.length === 0 ? "invisible" : ""}
+              ${sourceFiles.length === 0 || isMixedMediaType ? "invisible" : ""}
             `}
           >
             {t("convertTo", { format: convertedFormat })}
@@ -975,7 +997,7 @@ function App() {
                 disabled:transform-none
               "
               onClick={convertFiles}
-              disabled={sourceFiles.length === 0}
+              disabled={sourceFiles.length === 0 || isMixedMediaType}
             >
               {conversionSettingsChanged
                 ? t("reconvertChanged")
