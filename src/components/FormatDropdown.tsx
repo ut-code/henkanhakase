@@ -1,8 +1,8 @@
 import { useState } from "react";
 import AnimatedImageIcon from "../assets/animated-image.svg";
+import AudioIcon from "../assets/audio.svg";
 import ImageIcon from "../assets/image.svg";
 import VideoIcon from "../assets/video.svg";
-import AudioIcon from "../assets/audio.svg";
 import type { Format, ImageFormat, VideoFormat } from "../formats";
 import { IMAGE_FORMATS, VIDEO_FORMATS } from "../formats";
 import { type Locale, useTranslation } from "../i18n";
@@ -94,6 +94,7 @@ export function FormatDropdown({
   };
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: ドロップダウンの外側クリックを検知するため
     <div
       className="relative"
       onKeyDown={(e) => {
@@ -139,6 +140,7 @@ export function FormatDropdown({
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
+          aria-hidden="true"
         >
           <path
             strokeLinecap="round"
@@ -151,8 +153,10 @@ export function FormatDropdown({
 
       {isOpen && !disabled && (
         <>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: ドロップダウン外側クリック検出用バックドロップ */}
           <div
             className="fixed inset-0 z-10"
+            role="presentation"
             onClick={() => {
               setIsOpen(false);
               setTooltipFormat(null);
@@ -212,9 +216,7 @@ export function FormatDropdown({
                 <button
                   type="button"
                   aria-label={
-                    locale === "ja"
-                      ? `${item}の説明`
-                      : `${item} description`
+                    locale === "ja" ? `${item}の説明` : `${item} description`
                   }
                   onClick={(e) => {
                     e.stopPropagation();
