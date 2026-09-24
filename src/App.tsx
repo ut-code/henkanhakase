@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { copyFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
@@ -166,22 +166,63 @@ function App() {
     }
   }, []);
 
+  // メディアサイズなどの初期計測を行う関数
+  const probeFileDimensions = useCallback(async (file: SourceFileItem) => {
+    if (AUDIO_FORMATS.includes(file.format as AudioFormat)) {
+      setIsProbingDimensions(false);
+      setMediaDimensions(null);
+      return;
+    }
+
+    setIsProbingDimensions(true);
+    const probeId = ++dimensionProbeId.current;
+
+    try {
+      const dimensions = await invoke<MediaDimensions>(
+        "probe_media_dimensions",
+        {
+          request: {
+            inputPath: file.path,
+            inputFormat: formatToExtension(file.format),
+          },
+        },
+      );
+
+      if (probeId !== dimensionProbeId.current) return;
+
+      setMediaDimensions(dimensions);
+      setResizeWidth(clampDimension(dimensions.width));
+      setResizeHeight(clampDimension(dimensions.height));
+    } catch (probeError) {
+      if (probeId !== dimensionProbeId.current) return;
+      setDimensionProbeError(
+        `サイズの取得に失敗しました: ${String(probeError)}`,
+      );
+    } finally {
+      if (probeId === dimensionProbeId.current) {
+        setIsProbingDimensions(false);
+      }
+    }
+  }, []);
+
   // 選択された複数ファイルパスを一度に受け取り処理する関数
   const processSelectedFilePaths = useCallback(
-    async (filePaths: string[]) => {
-      if (filePaths.length === 0) return;
+    async (filePaths: string[], append = false) => {
+      if (!filePaths || filePaths.length === 0) return;
 
       const validFiles: SourceFileItem[] = [];
       const errors: string[] = [];
 
       for (const filePath of filePaths) {
+        if (!filePath) continue;
+
         const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
         const detectedFormat = detectFormatFromPath(filePath);
 
         if (!detectedFormat) {
           errors.push(
             t("unsupportedFormat", {
-              type: getExtensionFromPath(filePath),
+              type: getExtensionFromPath(filePath) || "unknown",
               formats: SUPPORTED_FORMATS.join(", "),
             }),
           );
@@ -202,74 +243,77 @@ function App() {
         setError(null);
       }
 
+      // 有効なファイルが1つもない場合はここで終了（クラッシュ防止）
       if (validFiles.length === 0) return;
 
-      setSourceFiles(validFiles);
-
-      // 旧一時ファイルの破棄
+      // 古い変換結果のクリア
       setConvertedResults((prev) => {
         cleanupOldTempFiles(prev);
         return [];
       });
 
       setConvertedSettingsKey(null);
-      setMediaDimensions(null);
       setDimensionProbeError(null);
       setAspectRatioLocked(true);
       setAntiAliasing(true);
       setLastChangedResizeAxis("width");
 
-      const firstFile = validFiles[0];
-      if (firstFile.format === "GIF") {
-        setConvertedFormat("MP4");
-      } else if (VIDEO_FORMATS.includes(firstFile.format as VideoFormat)) {
-        setConvertedFormat("GIF");
-      } else if (AUDIO_FORMATS.includes(firstFile.format as AudioFormat)) {
-        setConvertedFormat("MP3");
-      } else {
-        setConvertedFormat("PNG");
-      }
+      // sourceFiles を更新し、その時点の最新配列を使って処理を行う
+      setSourceFiles((prevFiles) => {
+        const nextFiles = append ? [...prevFiles, ...validFiles] : validFiles;
 
-      if (AUDIO_FORMATS.includes(firstFile.format as AudioFormat)) {
-        setIsProbingDimensions(false);
-        return;
-      }
-
-      setIsProbingDimensions(true);
-      const probeId = ++dimensionProbeId.current;
-
-      try {
-        const dimensions = await invoke<MediaDimensions>(
-          "probe_media_dimensions",
-          {
-            request: {
-              inputPath: firstFile.path,
-              inputFormat: formatToExtension(firstFile.format),
-            },
-          },
-        );
-
-        if (probeId !== dimensionProbeId.current) return;
-
-        setMediaDimensions(dimensions);
-        setResizeWidth(clampDimension(dimensions.width));
-        setResizeHeight(clampDimension(dimensions.height));
-      } catch (probeError) {
-        if (probeId !== dimensionProbeId.current) return;
-        setDimensionProbeError(
-          `サイズの取得に失敗しました: ${String(probeError)}`,
-        );
-      } finally {
-        if (probeId === dimensionProbeId.current) {
-          setIsProbingDimensions(false);
+        // 最初のファイルが存在する場合のみフォーマット切り替え & probe 実行
+        const firstFile = nextFiles[0];
+        if (firstFile?.format) {
+          if (!append || prevFiles.length === 0) {
+            if (firstFile.format === "GIF") {
+              setConvertedFormat("MP4");
+            } else if (
+              VIDEO_FORMATS.includes(firstFile.format as VideoFormat)
+            ) {
+              setConvertedFormat("GIF");
+            } else if (
+              AUDIO_FORMATS.includes(firstFile.format as AudioFormat)
+            ) {
+              setConvertedFormat("MP3");
+            } else {
+              setConvertedFormat("PNG");
+            }
+            probeFileDimensions(firstFile);
+          }
         }
-      }
+
+        return nextFiles;
+      });
     },
-    [cleanupOldTempFiles, t],
+    [cleanupOldTempFiles, probeFileDimensions, t],
   );
 
-  // Tauri 公式のネイティブファイル選択ダイアログを開く
-  const selectFileWithDialog = async () => {
+  // ファイル削除処理
+  const removeSourceFile = (id: string) => {
+    setSourceFiles((prev) => {
+      const filtered = prev.filter((f) => f.id !== id);
+      if (filtered.length > 0 && prev[0].id === id) {
+        // 先頭ファイルが削除された場合、次の先頭ファイルで probe を再実行
+        probeFileDimensions(filtered[0]);
+      } else if (filtered.length === 0) {
+        setMediaDimensions(null);
+      }
+      return filtered;
+    });
+  };
+
+  // 一括クリア処理
+  const clearAllSourceFiles = () => {
+    setSourceFiles([]);
+    setMediaDimensions(null);
+    setConvertedResults((prev) => {
+      cleanupOldTempFiles(prev);
+      return [];
+    });
+  };
+
+  const selectFileWithDialog = async (append = false) => {
     try {
       const selected = await open({
         multiple: true,
@@ -277,16 +321,16 @@ function App() {
       });
 
       if (Array.isArray(selected)) {
-        await processSelectedFilePaths(selected);
+        await processSelectedFilePaths(selected, append);
       } else if (selected && typeof selected === "string") {
-        await processSelectedFilePaths([selected]);
+        await processSelectedFilePaths([selected], append);
       }
     } catch (err) {
+      console.log(err);
       setError(t("fileSelectError", { error: String(err) }));
     }
   };
 
-  // Tauri の Drag & Drop イベントリスナーを登録
   useEffect(() => {
     let unlisten: (() => void) | undefined;
 
@@ -295,7 +339,7 @@ function App() {
         if (event.payload.type === "drop") {
           const paths = event.payload.paths;
           if (paths && paths.length > 0) {
-            processSelectedFilePaths(paths);
+            processSelectedFilePaths(paths, true);
           }
         }
       });
@@ -483,7 +527,24 @@ function App() {
     setIsConverting(false);
   };
 
-  // 変換後ファイルの一括保存処理（フォルダ選択）
+  // 個別保存機能
+  const saveSingleFile = async (res: ConvertedResultItem) => {
+    if (!res.convertedFilePath || !res.convertedFileName) return;
+
+    try {
+      const savePath = await save({
+        defaultPath: res.convertedFileName,
+      });
+
+      if (savePath && typeof savePath === "string") {
+        await copyFile(res.convertedFilePath, savePath);
+      }
+    } catch (saveErr) {
+      console.error(t("saveFailed"), saveErr);
+    }
+  };
+
+  // 一括保存機能（フォルダ選択）
   const saveAllFiles = async () => {
     const validResults = convertedResults.filter(
       (r) => r.convertedFilePath && r.convertedFileName,
@@ -682,7 +743,7 @@ function App() {
         {/* Input Panel */}
         <div
           className="
-            min-h-99.5
+            flex min-h-99.5 flex-col
             rounded-[20px]
             border border-[#e3e8f1]
             bg-white/90
@@ -693,95 +754,132 @@ function App() {
             max-[980px]:min-h-0
           "
         >
-          <div className="mb-6.25 flex items-start gap-3">
-            <span
-              className="
-                grid size-6.25 shrink-0 place-items-center
-                rounded-full
-                bg-[#eef1ff]
-                font-['Plus_Jakarta_Sans',sans-serif]
-                text-xs font-bold
-                text-[#586cec]
-              "
-            >
-              1
-            </span>
+          <div className="mb-4 flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              <span
+                className="
+                  grid size-6.25 shrink-0 place-items-center
+                  rounded-full
+                  bg-[#eef1ff]
+                  font-['Plus_Jakarta_Sans',sans-serif]
+                  text-xs font-bold
+                  text-[#586cec]
+                "
+              >
+                1
+              </span>
 
-            <div>
-              <h1 className="mb-0.75 text-base font-bold text-[#26354a]">
-                {t("sourceTitle")}
-              </h1>
+              <div>
+                <h1 className="mb-0.75 text-base font-bold text-[#26354a]">
+                  {t("sourceTitle")}
+                </h1>
 
-              <p className="m-0 text-xs text-[#99a4b5]">{t("sourceHint")}</p>
+                <p className="m-0 text-xs text-[#99a4b5]">{t("sourceHint")}</p>
+              </div>
             </div>
+
+            {sourceFiles.length > 0 && (
+              <button
+                type="button"
+                onClick={clearAllSourceFiles}
+                className="cursor-pointer text-xs text-[#d76269] hover:underline"
+              >
+                全クリア
+              </button>
+            )}
           </div>
 
-          <button
-            type="button"
-            className="
-              relative flex h-70 w-full cursor-pointer
-              overflow-hidden
-              flex-col items-center justify-center
-              rounded-[14px]
-              border-[1.5px] border-dashed
-              border-[#9eabff]
-              bg-[#fafbff]
-              p-6
-              text-[#657184]
-              transition duration-200
-              hover:border-[#6477f6]
-              hover:bg-[#f4f6ff]
-
-              max-[980px]:h-57.5
-            "
-            onClick={selectFileWithDialog}
-          >
-
-            <span
+          {sourceFiles.length === 0 ? (
+            <button
+              type="button"
               className="
-                grid size-12 place-items-center
+                flex h-70 w-full cursor-pointer
+                flex-col items-center justify-center
                 rounded-[14px]
-                bg-[#ebefff]
-                text-[#6276f7]
-              "
-            >
-              <img src={UploadIcon} alt="" />
-            </span>
+                border-[1.5px] border-dashed
+                border-[#9eabff]
+                bg-[#fafbff]
+                p-6
+                text-[#657184]
+                transition duration-200
+                hover:border-[#6477f6]
+                hover:bg-[#f4f6ff]
 
-            <strong
-              className="
-                mt-3.5 mb-1.25
-                max-w-full
-                overflow-hidden
-                text-ellipsis
-                whitespace-nowrap
-                text-sm
-                text-[#3c4a60]
+                max-[980px]:h-57.5
               "
+              onClick={() => selectFileWithDialog(false)}
             >
-              {sourceFiles.length > 0
-                ? `${sourceFiles.length} 件のファイルを選択中`
-                : t("dropFile")}
-            </strong>
+              <span
+                className="
+                  grid size-12 place-items-center
+                  rounded-[14px]
+                  bg-[#ebefff]
+                  text-[#6276f7]
+                "
+              >
+                <img src={UploadIcon} alt="" />
+              </span>
 
-            {sourceFiles.length > 0 ? (
-              <div className="max-h-40 w-full overflow-y-auto text-xs text-[#657184] flex flex-col gap-2">
-                {sourceFiles.map((f) => (
-                  <div key={f.id} className="flex items-center gap-2 rounded-md border border-[#e2e7f0] bg-white p-2">
-                    <div className="size-10 shrink-0 overflow-hidden rounded">
-                      <MediaPreview path={f.path} format={f.format} />
-                    </div>
-                    <div className="truncate text-left">
-                      <div className="font-medium text-[#3c4a60] truncate">{f.name}</div>
-                      <div className="text-[10px] text-[#8e9aab]">{f.format}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
+              <strong
+                className="
+                  mt-3.5 mb-1.25
+                  max-w-full
+                  overflow-hidden
+                  text-ellipsis
+                  whitespace-nowrap
+                  text-sm
+                  text-[#3c4a60]
+                "
+              >
+                {t("dropFile")}
+              </strong>
               <span className="text-xs">{t("chooseFile")}</span>
-            )}
-          </button>
+            </button>
+          ) : (
+            <div className="flex flex-1 flex-col justify-between">
+              <div className="max-h-56 overflow-y-auto pr-1">
+                <ul className="flex flex-col gap-2">
+                  {sourceFiles.map((f) => (
+                    <li
+                      key={f.id}
+                      className="flex items-center justify-between rounded-lg border border-[#e8ecf4] bg-[#fafbff] p-2 text-xs"
+                    >
+                      <div className="flex min-w-0 items-center gap-2 pr-2">
+                        <div className="size-10 shrink-0 overflow-hidden rounded">
+                          <MediaPreview path={f.path} format={f.format} />
+                        </div>
+                        <div className="truncate text-left">
+                          <div className="font-medium text-[#3c4a60] truncate">{f.name}</div>
+                          <div className="text-[10px] text-[#8e9aab]">{f.format}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeSourceFile(f.id)}
+                        className="grid size-5 shrink-0 place-items-center rounded bg-[#eef2f7] text-[#8390a3] transition hover:bg-[#d76269] hover:text-white"
+                        title="削除"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between border-t border-[#edf0f5] pt-3">
+                <span className="text-xs text-[#8390a3]">
+                  計 {sourceFiles.length} 件
+                </span>
+                <button
+                  type="button"
+                  onClick={() => selectFileWithDialog(true)}
+                  className="rounded-md border border-[#c1cbde] bg-white px-3 py-1.5 text-xs font-semibold text-[#40506a] transition hover:bg-[#f4f6ff]"
+                >
+                  + 追加
+                </button>
+              </div>
+            </div>
+          )}
 
           {error && (
             <p className="my-2 whitespace-pre-line text-[11px] leading-[1.6] text-[#d76269]">
@@ -891,7 +989,7 @@ function App() {
         {/* Output Panel */}
         <div
           className="
-            min-h-99.5
+            flex min-h-99.5 flex-col
             rounded-[20px]
             border border-[#e3e8f1]
             bg-white/90
@@ -927,97 +1025,120 @@ function App() {
 
           <div
             className={[
-              "flex h-70 flex-col items-center justify-center rounded-[14px] border bg-[#fcfdff] p-5.5 text-center text-[#8e9aab] max-[980px]:h-57.5",
+              "flex flex-1 flex-col items-center justify-between rounded-[14px] border p-5.5 text-center text-[#8e9aab]",
               convertedResults.length > 0
                 ? "border-[#dce3ff] bg-[#fbfcff]"
-                : "border-[#edf0f5]",
+                : "border-[#edf0f5] bg-[#fcfdff] justify-center",
             ].join(" ")}
           >
+            {convertedResults.length === 0 ? (
+              <>
+                <span
+                  className="
+                    grid size-12 place-items-center
+                    rounded-[14px]
+                    bg-[#f0f3f7]
+                    text-[#a9b4c4]
+                  "
+                >
+                  <img src={FileIcon} alt="" />
+                </span>
 
-            <div className="relative flex w-full flex-col items-center">
-            <span
-              className="
-                grid size-12 place-items-center
-                rounded-[14px]
-                bg-[#f0f3f7]
-                text-[#a9b4c4]
-              "
-            >
-              <img src={FileIcon} alt="" />
-            </span>
-
-            <strong
-              className="
-                mt-3.5 mb-1.25
-                max-w-full
-                overflow-hidden
-                text-ellipsis
-                whitespace-nowrap
-                text-sm
-                text-[#3c4a60]
-              "
-            >
-              {convertedResults.length > 0
-                ? `${successfulConversionsCount} / ${convertedResults.length} 件 変換完了`
-                : t("noOutput")}
-            </strong>
-
-            {convertedResults.length > 0 ? (
-              <div className="max-h-48 w-full overflow-y-auto my-1 text-xs flex flex-col gap-2">
-                {convertedResults.map((res) => (
-                  <div key={res.id} className="flex items-center gap-2 rounded-md border border-[#e2e7f0] bg-white p-2">
-                    {res.convertedFilePath ? (
-                      <>
-                        <div className="size-10 shrink-0 overflow-hidden rounded">
-                          <MediaPreview
-                            path={res.convertedFilePath}
-                            format={res.convertedFileFormat ?? convertedFormat}
-                          />
-                        </div>
-                        <div className="truncate text-left flex-1">
-                          <span className="text-[#3c4a60] font-medium block truncate">
-                            ✓ {res.convertedFileName}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="truncate text-left flex-1">
-                        <span className="text-[#d76269] block truncate">
-                          ✕ {res.sourceName}: {res.error}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                <strong
+                  className="
+                    mt-3.5 mb-1.25
+                    max-w-full
+                    overflow-hidden
+                    text-ellipsis
+                    whitespace-nowrap
+                    text-sm
+                    text-[#3c4a60]
+                  "
+                >
+                  {t("noOutput")}
+                </strong>
+                <span className="text-xs">{t("addAndConvert")}</span>
+              </>
             ) : (
-              <span className="text-xs">{t("addAndConvert")}</span>
-            )}
+              <div className="flex w-full flex-1 flex-col justify-between">
+                <div>
+                  <strong className="block mb-3 text-sm text-[#3c4a60]">
+                    {successfulConversionsCount} / {convertedResults.length} 件
+                    変換完了
+                  </strong>
 
-            {successfulConversionsCount > 0 && (
-              <button
-                type="button"
-                className="
-                  mt-3
-                  rounded-[9px]
-                  border-0
-                  bg-linear-to-br from-[#6177f6] to-[#7c69e9]
-                  px-3.75
-                  py-2.25
-                  text-xs
-                  font-bold
-                  text-white
-                  shadow-[0_5px_13px_rgba(93,111,232,0.22)]
-                  transition duration-200
-                  hover:-translate-y-px
-                  hover:brightness-[1.04]
-                "
-                onClick={saveAllFiles}
-              >
-                保存フォルダを選択して保存
-              </button>
+                  <div className="max-h-52 w-full overflow-y-auto pr-1">
+                    <ul className="flex flex-col gap-2">
+                      {convertedResults.map((res) => (
+                        <li
+                          key={res.id}
+                          className="flex items-center justify-between rounded-lg border border-[#e8ecf4] bg-white p-2 text-xs"
+                        >
+                          <div className="flex min-w-0 items-center gap-2 pr-2">
+                            {res.convertedFilePath ? (
+                              <>
+                                <div className="size-10 shrink-0 overflow-hidden rounded">
+                                  <MediaPreview
+                                    path={res.convertedFilePath}
+                                    format={res.convertedFileFormat ?? convertedFormat}
+                                  />
+                                </div>
+                                <div className="truncate text-left flex-1">
+                                  <span className="text-[#3c4a60] font-medium block truncate">
+                                    ✓ {res.convertedFileName}
+                                  </span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="truncate text-left flex-1">
+                                <span className="text-[#d76269] block truncate">
+                                  ✕ {res.sourceName}: {res.error}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {res.convertedFilePath && (
+                            <button
+                              type="button"
+                              onClick={() => saveSingleFile(res)}
+                              className="shrink-0 rounded bg-[#eef1ff] px-2 py-1 text-[11px] font-semibold text-[#586cec] transition hover:bg-[#6177f6] hover:text-white"
+                            >
+                              保存
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {successfulConversionsCount > 0 && (
+                  <button
+                    type="button"
+                    className="
+                      mt-4
+                      w-full
+                      rounded-[9px]
+                      border-0
+                      bg-linear-to-br from-[#6177f6] to-[#7c69e9]
+                      px-3.75
+                      py-2.25
+                      text-xs
+                      font-bold
+                      text-white
+                      shadow-[0_5px_13px_rgba(93,111,232,0.22)]
+                      transition duration-200
+                      hover:-translate-y-px
+                      hover:brightness-[1.04]
+                    "
+                    onClick={saveAllFiles}
+                  >
+                    保存フォルダを選択して一括保存
+                  </button>
+                )}
+              </div>
             )}
-            </div>
           </div>
         </div>
       </section>
