@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { copyFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
@@ -35,26 +35,34 @@ import {
 import { apiErrorMessage } from "./utils/error.ts";
 import { detectFormatFromPath, getExtensionFromPath } from "./utils/path.ts";
 
+interface SourceFileItem {
+  id: string;
+  name: string;
+  path: string;
+  format: Format;
+}
+
+interface ConvertedResultItem {
+  id: string;
+  sourceName: string;
+  convertedFilePath: string | null;
+  convertedFileName: string | null;
+  convertedFileFormat: Format | null;
+  error: string | null;
+}
+
 function App() {
   const { locale, setLocale, t } = useTranslation();
-  const [sourceFileName, setSourceFileName] = useState<string | null>(null);
-  const [sourceFilePath, setSourceFilePath] = useState<string | null>(null);
-  const [sourceFileType, setSourceFileType] = useState<Format | null>(null);
 
-  const [convertedFilePath, setConvertedFilePath] = useState<string | null>(
-    null,
-  );
-  const [convertedFileName, setConvertedFileName] = useState<string | null>(
-    null,
-  );
-  const [convertedFileFormat, setConvertedFileFormat] = useState<Format | null>(
-    null,
-  );
+  // 複数ファイルを配列で管理
+  const [sourceFiles, setSourceFiles] = useState<SourceFileItem[]>([]);
+  const [convertedResults, setConvertedResults] = useState<
+    ConvertedResultItem[]
+  >([]);
   const [convertedSettingsKey, setConvertedSettingsKey] = useState<
     string | null
   >(null);
 
-  const sourceFormat = sourceFileType;
   const [convertedFormat, setConvertedFormat] = useState<Format>("PNG");
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [isConverting, setIsConverting] = useState(false);
@@ -119,101 +127,124 @@ function App() {
     audioCompression,
   });
   const conversionSettingsChanged =
-    convertedFilePath !== null &&
-    convertedFileName !== null &&
+    convertedResults.length > 0 &&
     convertedSettingsKey !== conversionSettingsKey;
 
+  // 選択されているすべてのファイルに対応する出力フォーマット候補を出す
   const availableOutputFormats = useMemo<Format[]>(() => {
-    if (!sourceFormat) {
-      return [];
+    if (sourceFiles.length === 0) return [];
+
+    let hasImage = false;
+    let hasVideo = false;
+    let hasAudio = false;
+    let hasGif = false;
+
+    for (const file of sourceFiles) {
+      if (file.format === "GIF") hasGif = true;
+      else if (VIDEO_FORMATS.includes(file.format as VideoFormat))
+        hasVideo = true;
+      else if (AUDIO_FORMATS.includes(file.format as AudioFormat))
+        hasAudio = true;
+      else hasImage = true;
     }
 
-    if (sourceFormat === "GIF") {
-      return [...IMAGE_FORMATS, ...VIDEO_FORMATS];
-    }
-
-    if (VIDEO_FORMATS.includes(sourceFormat as VideoFormat)) {
-      return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
-    }
-
-    if (AUDIO_FORMATS.includes(sourceFormat as AudioFormat)) {
-      return [...AUDIO_FORMATS];
-    }
+    if (hasVideo || hasGif) return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
+    if (hasAudio) return [...AUDIO_FORMATS];
+    if (hasImage) return [...IMAGE_FORMATS];
 
     return [...IMAGE_FORMATS];
-  }, [sourceFormat]);
+  }, [sourceFiles]);
 
   // 古い一時ファイルを破棄するヘルパー
-  const cleanupOldTempFile = useCallback((filePath: string | null) => {
-    if (filePath) {
-      invoke("cleanup_temp_file", { path: filePath }).catch(console.error);
+  const cleanupOldTempFiles = useCallback((results: ConvertedResultItem[]) => {
+    for (const res of results) {
+      if (res.convertedFilePath) {
+        invoke("cleanup_temp_file", { path: res.convertedFilePath }).catch(
+          console.error,
+        );
+      }
     }
   }, []);
 
-  // ファイルパスを受け取って内部状態を更新し、メディア情報の計測を行う共通処理
-  const processSelectedFilePath = useCallback(
-    async (filePath: string) => {
-      const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
-      const detectedFormat = detectFormatFromPath(filePath);
+  // 選択された複数ファイルパスを一度に受け取り処理する関数
+  const processSelectedFilePaths = useCallback(
+    async (filePaths: string[]) => {
+      if (filePaths.length === 0) return;
 
-      if (!detectedFormat) {
-        setError(
-          t("unsupportedFormat", {
-            type: getExtensionFromPath(filePath),
-            formats: SUPPORTED_FORMATS.join(", "),
-          }),
-        );
-        return;
+      const validFiles: SourceFileItem[] = [];
+      const errors: string[] = [];
+
+      for (const filePath of filePaths) {
+        const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
+        const detectedFormat = detectFormatFromPath(filePath);
+
+        if (!detectedFormat) {
+          errors.push(
+            t("unsupportedFormat", {
+              type: getExtensionFromPath(filePath),
+              formats: SUPPORTED_FORMATS.join(", "),
+            }),
+          );
+          continue;
+        }
+
+        validFiles.push({
+          id: `${filePath}-${Date.now()}-${Math.random()}`,
+          name: fileName,
+          path: filePath,
+          format: detectedFormat,
+        });
       }
 
-      console.log(
-        `fileName: ${fileName},\nfilePath: ${filePath},\ndetectedFormat: ${detectedFormat}`,
-      );
-      setSourceFileName(fileName);
-      setSourceFilePath(filePath);
-      setSourceFileType(detectedFormat);
+      if (errors.length > 0) {
+        setError(errors.join("\n"));
+      } else {
+        setError(null);
+      }
 
-      // 新しいファイルが選ばれたら旧一時ファイルを消去
-      setConvertedFilePath((prevPath) => {
-        cleanupOldTempFile(prevPath);
-        return null;
+      if (validFiles.length === 0) return;
+
+      setSourceFiles(validFiles);
+
+      // 旧一時ファイルの破棄
+      setConvertedResults((prev) => {
+        cleanupOldTempFiles(prev);
+        return [];
       });
-      setConvertedFileName(null);
-      setConvertedFileFormat(null);
+
       setConvertedSettingsKey(null);
-      setError(null);
       setMediaDimensions(null);
       setDimensionProbeError(null);
       setAspectRatioLocked(true);
       setAntiAliasing(true);
       setLastChangedResizeAxis("width");
 
-      const probeId = ++dimensionProbeId.current;
-
-      if (detectedFormat === "GIF") {
+      const firstFile = validFiles[0];
+      if (firstFile.format === "GIF") {
         setConvertedFormat("MP4");
-      } else if (VIDEO_FORMATS.includes(detectedFormat as VideoFormat)) {
+      } else if (VIDEO_FORMATS.includes(firstFile.format as VideoFormat)) {
         setConvertedFormat("GIF");
-      } else if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
+      } else if (AUDIO_FORMATS.includes(firstFile.format as AudioFormat)) {
         setConvertedFormat("MP3");
       } else {
         setConvertedFormat("PNG");
       }
 
-      if (AUDIO_FORMATS.includes(detectedFormat as AudioFormat)) {
+      if (AUDIO_FORMATS.includes(firstFile.format as AudioFormat)) {
         setIsProbingDimensions(false);
         return;
       }
 
       setIsProbingDimensions(true);
+      const probeId = ++dimensionProbeId.current;
 
       try {
         const dimensions = await invoke<MediaDimensions>(
           "probe_media_dimensions",
           {
             request: {
-              inputPath: filePath,
-              inputFormat: formatToExtension(detectedFormat),
+              inputPath: firstFile.path,
+              inputFormat: formatToExtension(firstFile.format),
             },
           },
         );
@@ -234,19 +265,21 @@ function App() {
         }
       }
     },
-    [cleanupOldTempFile, t],
+    [cleanupOldTempFiles, t],
   );
 
   // Tauri 公式のネイティブファイル選択ダイアログを開く
   const selectFileWithDialog = async () => {
     try {
       const selected = await open({
-        multiple: false,
+        multiple: true,
         directory: false,
       });
 
-      if (selected && typeof selected === "string") {
-        await processSelectedFilePath(selected);
+      if (Array.isArray(selected)) {
+        await processSelectedFilePaths(selected);
+      } else if (selected && typeof selected === "string") {
+        await processSelectedFilePaths([selected]);
       }
     } catch (err) {
       setError(t("fileSelectError", { error: String(err) }));
@@ -262,7 +295,7 @@ function App() {
         if (event.payload.type === "drop") {
           const paths = event.payload.paths;
           if (paths && paths.length > 0) {
-            processSelectedFilePath(paths[0]);
+            processSelectedFilePaths(paths);
           }
         }
       });
@@ -273,7 +306,7 @@ function App() {
     return () => {
       if (unlisten) unlisten();
     };
-  }, [processSelectedFilePath]);
+  }, [processSelectedFilePaths]);
 
   const buildConversionOptions = () => {
     const resizeOptions =
@@ -388,64 +421,91 @@ function App() {
     }
   };
 
-  const convertFile = async () => {
-    if (!sourceFilePath || !sourceFileName || !sourceFormat) return;
+  // 複数ファイルを一括で順次変換する処理
+  const convertFiles = async () => {
+    if (sourceFiles.length === 0) return;
 
     const settingsKeyAtConversion = conversionSettingsKey;
     setIsConverting(true);
     setError(null);
 
-    try {
-      const extension = formatToExtension(convertedFormat);
-      const inputExtension = formatToExtension(sourceFormat);
-      const stem = sourceFileName.replace(/\.[^.]+$/, "");
+    // 一時ファイルのクリーンアップ
+    cleanupOldTempFiles(convertedResults);
+    setConvertedResults([]);
 
-      // Rust側へファイルの絶対パスを引数として渡し、出力された一時ファイルの絶対パスを受け取る
-      const outputTempPath = await invoke<string>("convert_file", {
-        request: {
-          inputPath: sourceFilePath,
-          stem,
-          inputFormat: inputExtension,
-          outputFormat: extension,
-          options: buildConversionOptions(),
-        },
-      });
+    const newResults: ConvertedResultItem[] = [];
 
-      const sequenceKey = stem;
-      const sequence =
-        (outputConversionSequences.current.get(sequenceKey) ?? 0) + 1;
-      outputConversionSequences.current.set(sequenceKey, sequence);
-      const outputName = `${stem}_${sequence}.${extension}`;
+    for (const file of sourceFiles) {
+      try {
+        const extension = formatToExtension(convertedFormat);
+        const inputExtension = formatToExtension(file.format);
+        const stem = file.name.replace(/\.[^.]+$/, "");
 
-      cleanupOldTempFile(convertedFilePath);
+        const outputTempPath = await invoke<string>("convert_file", {
+          request: {
+            inputPath: file.path,
+            stem,
+            inputFormat: inputExtension,
+            outputFormat: extension,
+            options: buildConversionOptions(),
+          },
+        });
 
-      setConvertedFilePath(outputTempPath);
-      setConvertedFileName(outputName);
-      setConvertedFileFormat(convertedFormat);
-      setConvertedSettingsKey(settingsKeyAtConversion);
-    } catch (error) {
-      setError(apiErrorMessage(error, t));
-    } finally {
-      setIsConverting(false);
+        const sequenceKey = stem;
+        const sequence =
+          (outputConversionSequences.current.get(sequenceKey) ?? 0) + 1;
+        outputConversionSequences.current.set(sequenceKey, sequence);
+        const outputName = `${stem}_${sequence}.${extension}`;
+
+        newResults.push({
+          id: file.id,
+          sourceName: file.name,
+          convertedFilePath: outputTempPath,
+          convertedFileName: outputName,
+          convertedFileFormat: convertedFormat,
+          error: null,
+        });
+      } catch (err) {
+        // 個別のエラーハンドリング：失敗してもループを中断しない
+        newResults.push({
+          id: file.id,
+          sourceName: file.name,
+          convertedFilePath: null,
+          convertedFileName: null,
+          convertedFileFormat: null,
+          error: apiErrorMessage(err, t),
+        });
+      }
     }
+
+    setConvertedResults(newResults);
+    setConvertedSettingsKey(settingsKeyAtConversion);
+    setIsConverting(false);
   };
 
-  const saveFile = async () => {
-    if (!convertedFilePath || !convertedFileName) return;
+  // 変換後ファイルの一括保存処理（フォルダ選択）
+  const saveAllFiles = async () => {
+    const validResults = convertedResults.filter(
+      (r) => r.convertedFilePath && r.convertedFileName,
+    );
+    if (validResults.length === 0) return;
 
     try {
-      const destinationPath = await save({
-        defaultPath: convertedFileName,
+      const selectedDir = await open({
+        directory: true,
+        multiple: false,
       });
 
-      if (!destinationPath) {
-        return;
-      }
+      if (!selectedDir || typeof selectedDir !== "string") return;
 
-      // 追記・コピー処理（Tauri FSのcopyFileでパス指定転送）
-      await copyFile(convertedFilePath, destinationPath);
-    } catch (error) {
-      console.error(t("saveFailed"), error);
+      for (const res of validResults) {
+        if (res.convertedFilePath && res.convertedFileName) {
+          const destinationPath = `${selectedDir}/${res.convertedFileName}`;
+          await copyFile(res.convertedFilePath, destinationPath);
+        }
+      }
+    } catch (saveErr) {
+      console.error(t("saveFailed"), saveErr);
     }
   };
 
@@ -529,6 +589,10 @@ function App() {
       );
     }
   };
+
+  const successfulConversionsCount = convertedResults.filter(
+    (r) => r.convertedFilePath,
+  ).length;
 
   return (
     <main
@@ -672,9 +736,7 @@ function App() {
             "
             onClick={selectFileWithDialog}
           >
-            <MediaPreview path={sourceFilePath} format={sourceFormat} />
 
-            <span className="relative flex w-full flex-col items-center">
             <span
               className="
                 grid size-12 place-items-center
@@ -697,17 +759,32 @@ function App() {
                 text-[#3c4a60]
               "
             >
-              {sourceFileName ?? t("dropFile")}
+              {sourceFiles.length > 0
+                ? `${sourceFiles.length} 件のファイルを選択中`
+                : t("dropFile")}
             </strong>
 
-            <span className="text-xs">
-              {sourceFilePath ? t("chooseAnother") : t("chooseFile")}
-            </span>
-            </span>
+            {sourceFiles.length > 0 ? (
+              <div className="max-h-40 w-full overflow-y-auto text-xs text-[#657184] flex flex-col gap-2">
+                {sourceFiles.map((f) => (
+                  <div key={f.id} className="flex items-center gap-2 rounded-md border border-[#e2e7f0] bg-white p-2">
+                    <div className="size-10 shrink-0 overflow-hidden rounded">
+                      <MediaPreview path={f.path} format={f.format} />
+                    </div>
+                    <div className="truncate text-left">
+                      <div className="font-medium text-[#3c4a60] truncate">{f.name}</div>
+                      <div className="text-[10px] text-[#8e9aab]">{f.format}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs">{t("chooseFile")}</span>
+            )}
           </button>
 
           {error && (
-            <p className="my-2 text-[11px] leading-[1.6] text-[#d76269]">
+            <p className="my-2 whitespace-pre-line text-[11px] leading-[1.6] text-[#d76269]">
               {error}
             </p>
           )}
@@ -731,7 +808,7 @@ function App() {
           <FormatDropdown
             value={convertedFormat}
             options={availableOutputFormats}
-            disabled={!sourceFilePath}
+            disabled={sourceFiles.length === 0}
             onChange={handleFormatChange}
           />
 
@@ -748,7 +825,7 @@ function App() {
 
               max-[980px]:absolute
               max-[980px]:bottom-0
-              ${!sourceFilePath ? "invisible" : ""}
+              ${sourceFiles.length === 0 ? "invisible" : ""}
             `}
           >
             {t("convertTo", { format: convertedFormat })}
@@ -799,12 +876,12 @@ function App() {
                 disabled:shadow-none
                 disabled:transform-none
               "
-              onClick={convertFile}
-              disabled={!sourceFilePath}
+              onClick={convertFiles}
+              disabled={sourceFiles.length === 0}
             >
               {conversionSettingsChanged
                 ? t("reconvertChanged")
-                : convertedFileName && convertedFilePath
+                : convertedResults.length > 0
                   ? t("convertAgain")
                   : t("convert")}
             </button>
@@ -850,13 +927,12 @@ function App() {
 
           <div
             className={[
-              "relative flex h-70 flex-col items-center justify-center overflow-hidden rounded-[14px] border bg-[#fcfdff] p-5.5 text-center text-[#8e9aab] max-[980px]:h-57.5",
-              convertedFilePath
+              "flex h-70 flex-col items-center justify-center rounded-[14px] border bg-[#fcfdff] p-5.5 text-center text-[#8e9aab] max-[980px]:h-57.5",
+              convertedResults.length > 0
                 ? "border-[#dce3ff] bg-[#fbfcff]"
                 : "border-[#edf0f5]",
             ].join(" ")}
           >
-            <MediaPreview path={convertedFilePath} format={convertedFormat} />
 
             <div className="relative flex w-full flex-col items-center">
             <span
@@ -881,20 +957,48 @@ function App() {
                 text-[#3c4a60]
               "
             >
-              {convertedFileName ?? t("noOutput")}
+              {convertedResults.length > 0
+                ? `${successfulConversionsCount} / ${convertedResults.length} 件 変換完了`
+                : t("noOutput")}
             </strong>
 
-            <span className="text-xs">
-              {convertedFilePath
-                ? `${t("formatLabel", { format: convertedFileFormat ?? "" })}`
-                : t("addAndConvert")}
-            </span>
+            {convertedResults.length > 0 ? (
+              <div className="max-h-48 w-full overflow-y-auto my-1 text-xs flex flex-col gap-2">
+                {convertedResults.map((res) => (
+                  <div key={res.id} className="flex items-center gap-2 rounded-md border border-[#e2e7f0] bg-white p-2">
+                    {res.convertedFilePath ? (
+                      <>
+                        <div className="size-10 shrink-0 overflow-hidden rounded">
+                          <MediaPreview
+                            path={res.convertedFilePath}
+                            format={res.convertedFileFormat ?? convertedFormat}
+                          />
+                        </div>
+                        <div className="truncate text-left flex-1">
+                          <span className="text-[#3c4a60] font-medium block truncate">
+                            ✓ {res.convertedFileName}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="truncate text-left flex-1">
+                        <span className="text-[#d76269] block truncate">
+                          ✕ {res.sourceName}: {res.error}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs">{t("addAndConvert")}</span>
+            )}
 
-            {convertedFilePath && (
+            {successfulConversionsCount > 0 && (
               <button
                 type="button"
                 className="
-                  mt-4.5
+                  mt-3
                   rounded-[9px]
                   border-0
                   bg-linear-to-br from-[#6177f6] to-[#7c69e9]
@@ -908,9 +1012,9 @@ function App() {
                   hover:-translate-y-px
                   hover:brightness-[1.04]
                 "
-                onClick={saveFile}
+                onClick={saveAllFiles}
               >
-                {t("saveFile")}
+                保存フォルダを選択して保存
               </button>
             )}
             </div>
@@ -961,7 +1065,7 @@ function App() {
 
         {detailsOpen && (
           <div className="border-t border-[#edf0f5] px-5.5 py-4">
-            {sourceFilePath && !isAudioFormat(convertedFormat) ? (
+            {sourceFiles.length > 0 && !isAudioFormat(convertedFormat) ? (
               <div className="flex flex-col gap-5">
                 <ResizeOptions
                   dimensions={mediaDimensions}
@@ -982,7 +1086,7 @@ function App() {
                 {IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ? (
                   <ImageOptions
                     format={convertedFormat as ImageFormat}
-                    sourceFormat={sourceFormat}
+                    sourceFormat={sourceFiles[0]?.format ?? null}
                     pngCompressionLevel={pngCompressionLevel}
                     onPngCompressionLevelChange={setPngCompressionLevel}
                     jpegQV={jpegQV}
@@ -1014,7 +1118,9 @@ function App() {
               />
             ) : (
               <p className="text-xs text-[#9aa6b7]">
-                {sourceFilePath ? t("noOptions") : t("chooseForOptions")}
+                {sourceFiles.length > 0
+                  ? t("noOptions")
+                  : t("chooseForOptions")}
               </p>
             )}
           </div>
