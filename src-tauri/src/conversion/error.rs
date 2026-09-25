@@ -5,12 +5,14 @@ use serde::Serialize;
 pub enum ErrorCode {
     ConversionCancelled,
     InvalidOptions,
-    InputWriteFailed,
     FfmpegUnavailable,
     FfmpegStartFailed,
     ConversionFailed,
-    OutputReadFailed,
     ProbeFailed,
+    InputFileNotFound,
+    TempDirCreationFailed,
+    TimestampFetchFailed,
+    OutputFileNotGenerated,
     ThumbnailFailed,
 }
 

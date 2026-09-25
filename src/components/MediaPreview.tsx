@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { readFile } from "@tauri-apps/plugin-fs";
 import { useEffect, useRef, useState } from "react";
 import {
   IMAGE_FORMATS,
@@ -10,11 +11,11 @@ import {
 } from "../formats.ts";
 
 type MediaPreviewProps = {
-  file: File | null;
+  path: string | null;
   format: Format | null;
 };
 
-export function MediaPreview({ file, format }: MediaPreviewProps) {
+export function MediaPreview({ path, format }: MediaPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [animatedUrl, setAnimatedUrl] = useState<string | null>(null);
@@ -38,7 +39,7 @@ export function MediaPreview({ file, format }: MediaPreviewProps) {
 
   useEffect(() => {
     setThumbnailUrl(null);
-    if (!file || !format) return;
+    if (!path || !format) return;
 
     let cancelled = false;
     let objectUrl: string | null = null;
@@ -53,16 +54,12 @@ export function MediaPreview({ file, format }: MediaPreviewProps) {
       format === "GIF" ||
       VIDEO_FORMATS.includes(format as VideoFormat)
     ) {
-      file
-        .arrayBuffer()
-        .then((buffer) =>
-          invoke<number[] | Uint8Array>("generate_thumbnail", {
-            request: {
-              data: Array.from(new Uint8Array(buffer)),
-              inputFormat: formatToExtension(format),
-            },
-          }),
-        )
+      invoke<number[] | Uint8Array>("generate_thumbnail", {
+        request: {
+          inputPath: path,
+          inputFormat: formatToExtension(format),
+        },
+      })
         .then((result) => {
           const bytes =
             result instanceof Uint8Array ? result : new Uint8Array(result);
@@ -76,23 +73,43 @@ export function MediaPreview({ file, format }: MediaPreviewProps) {
           console.error("サムネイルの生成に失敗しました:", error);
         });
     } else if (IMAGE_FORMATS.includes(format as ImageFormat)) {
-      show(file);
+      readFile(path)
+        .then((bytes) => show(new Blob([bytes as BlobPart])))
+        .catch((error) => {
+          console.error("プレビューの読み込みに失敗しました:", error);
+        });
     }
 
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [file, format]);
+  }, [path, format]);
 
   useEffect(() => {
     setAnimatedUrl(null);
-    if (!file || !isGif || !hovered) return;
+    if (!path || !isGif || !hovered) return;
 
-    const objectUrl = URL.createObjectURL(file);
-    setAnimatedUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file, isGif, hovered]);
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    readFile(path)
+      .then((bytes) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(
+          new Blob([bytes as BlobPart], { type: "image/gif" }),
+        );
+        setAnimatedUrl(objectUrl);
+      })
+      .catch((error) => {
+        console.error("GIFの読み込みに失敗しました:", error);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [path, isGif, hovered]);
 
   return (
     <div

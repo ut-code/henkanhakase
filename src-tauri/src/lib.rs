@@ -3,7 +3,7 @@ mod conversion;
 use conversion::{ApiError, ConversionRequest, MediaDimensions, MediaProbeRequest};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::State;
+use tauri::{State, WindowEvent};
 
 #[derive(Default)]
 pub struct AppState {
@@ -15,11 +15,8 @@ async fn convert_file(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: ConversionRequest,
-) -> Result<Vec<u8>, ApiError> {
-    // 変換開始時にキャンセルフラグを「false（未キャンセル）」にリセット
+) -> Result<String, ApiError> {
     state.cancel_flag.store(false, Ordering::Relaxed);
-
-    // conversion モジュールに cancel_flag (Arc<AtomicBool>) を渡して処理を実行
     conversion::convert(&app, request, state.cancel_flag.clone())
         .await
         .map_err(ApiError::from)
@@ -27,7 +24,6 @@ async fn convert_file(
 
 #[tauri::command]
 fn cancel_conversion(state: State<'_, AppState>) {
-    // フラグを「true（キャンセル済み）」に更新
     state.cancel_flag.store(true, Ordering::Relaxed);
 }
 
@@ -51,8 +47,16 @@ async fn generate_thumbnail(
         .map_err(ApiError::from)
 }
 
+#[tauri::command]
+fn cleanup_temp_file(path: String) {
+    conversion::remove_temp_file(&path);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // アプリ起動時に前回の古い一時ディレクトリを初期化・全削除
+    conversion::cleanup_temp_dir();
+
     tauri::Builder::default()
         .manage(AppState::default())
         .plugin(tauri_plugin_shell::init())
@@ -63,8 +67,15 @@ pub fn run() {
             convert_file,
             probe_media_dimensions,
             cancel_conversion,
-            generate_thumbnail
+            generate_thumbnail,
+            cleanup_temp_file
         ])
+        // ウィンドウイベントの監視を追加（アプリ終了時に一時ディレクトリごと削除）
+        .on_window_event(|_window, event| {
+            if let WindowEvent::CloseRequested { .. } = event {
+                conversion::cleanup_temp_dir();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
