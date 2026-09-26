@@ -325,7 +325,7 @@ impl ConversionOptions {
 pub struct MediaProbeRequest {
     /// 入力ファイルの絶対パス
     pub input_path: String,
-    pub _input_format: FileFormat,
+    pub input_format: FileFormat,
 }
 
 #[derive(Debug, Serialize)]

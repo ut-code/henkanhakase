@@ -65,6 +65,10 @@ fn build_default_args(
         args.extend(["-vf".into(), scale]);
     }
 
+    if matches!(output_format, FileFormat::Png | FileFormat::Jpeg) {
+        args.extend(["-frames:v".into(), "1".into()]);
+    }
+
     if let Some(compression_level) = options.compression_level {
         args.extend(["-compression_level".into(), compression_level.to_string()]);
     }

@@ -15,6 +15,7 @@ use tauri_plugin_shell::ShellExt;
 
 pub use error::{ApiError, ConversionError, ErrorCode};
 pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
+use types::FileFormat;
 
 /// 指定された一時ファイルを明示的に削除する関数
 pub fn remove_temp_file(path_str: &str) {
@@ -150,6 +151,64 @@ pub async fn probe_dimensions(
         fs::read(probe_file.path()).map_err(|_| ConversionError::new(ErrorCode::ProbeFailed))?;
 
     parse_png_dimensions(&probe_data)
+}
+
+pub async fn generate_thumbnail(
+    app: &AppHandle,
+    request: MediaProbeRequest,
+) -> Result<Vec<u8>, ConversionError> {
+    let input_path = PathBuf::from(&request.input_path);
+    if !input_path.exists() {
+        return Err(ConversionError::new(ErrorCode::InputFileNotFound));
+    }
+
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|_| ConversionError::new(ErrorCode::TempDirCreationFailed))?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| ConversionError::new(ErrorCode::TimestampFetchFailed))?
+        .as_nanos();
+
+    let is_gif = request.input_format == FileFormat::Gif;
+    let thumbnail_file = TempFile::new(temp_dir.join(format!(
+        "thumbnail_{}.{}",
+        timestamp,
+        if is_gif { "png" } else { "jpg" }
+    )));
+
+    let mut args = vec![
+        "-y".to_string(),
+        "-i".to_string(),
+        input_path.to_string_lossy().into_owned(),
+        "-an".to_string(),
+        "-vf".to_string(),
+        "thumbnail=30,scale=iw*sar:ih,setsar=1,scale=640:640:force_original_aspect_ratio=decrease".to_string(),
+        "-frames:v".to_string(),
+        "1".to_string(),
+        "-update".to_string(),
+        "1".to_string(),
+    ];
+    if !is_gif {
+        args.extend(["-q:v".to_string(), "4".to_string()]);
+    }
+    args.push(thumbnail_file.path().to_string_lossy().into_owned());
+
+    let output = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|_| ConversionError::new(ErrorCode::FfmpegUnavailable))?
+        .args(args)
+        .output()
+        .await
+        .map_err(|_| ConversionError::new(ErrorCode::ThumbnailFailed))?;
+
+    if !output.status.success() {
+        return Err(ConversionError::new(ErrorCode::ThumbnailFailed));
+    }
+
+    fs::read(thumbnail_file.path()).map_err(|_| ConversionError::new(ErrorCode::ThumbnailFailed))
 }
 
 fn parse_png_dimensions(data: &[u8]) -> Result<MediaDimensions, ConversionError> {

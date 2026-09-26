@@ -12,7 +12,8 @@ pub enum ErrorCode {
     InputFileNotFound,
     TempDirCreationFailed,
     TimestampFetchFailed,
-    OutputFileNotGenerated
+    OutputFileNotGenerated,
+    ThumbnailFailed,
 }
 
 #[derive(Debug, Serialize)]

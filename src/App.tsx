@@ -9,6 +9,7 @@ import UploadIcon from "./assets/upload.svg";
 import { AudioOptions } from "./components/AudioOptions";
 import { FormatDropdown } from "./components/FormatDropdown";
 import { ImageOptions } from "./components/ImageOptions";
+import { MediaPreview } from "./components/MediaPreview";
 import { ResizeOptions } from "./components/ResizeOptions";
 import { VideoOptions } from "./components/VideoOptions";
 import {
@@ -654,7 +655,8 @@ function App() {
           <button
             type="button"
             className="
-              flex h-70 w-full cursor-pointer
+              relative flex h-70 w-full cursor-pointer
+              overflow-hidden
               flex-col items-center justify-center
               rounded-[14px]
               border-[1.5px] border-dashed
@@ -670,6 +672,9 @@ function App() {
             "
             onClick={selectFileWithDialog}
           >
+            <MediaPreview path={sourceFilePath} format={sourceFormat} />
+
+            <span className="relative flex w-full flex-col items-center">
             <span
               className="
                 grid size-12 place-items-center
@@ -697,6 +702,7 @@ function App() {
 
             <span className="text-xs">
               {sourceFilePath ? t("chooseAnother") : t("chooseFile")}
+            </span>
             </span>
           </button>
 
@@ -844,12 +850,15 @@ function App() {
 
           <div
             className={[
-              "flex h-70 flex-col items-center justify-center rounded-[14px] border bg-[#fcfdff] p-5.5 text-center text-[#8e9aab] max-[980px]:h-57.5",
+              "relative flex h-70 flex-col items-center justify-center overflow-hidden rounded-[14px] border bg-[#fcfdff] p-5.5 text-center text-[#8e9aab] max-[980px]:h-57.5",
               convertedFilePath
                 ? "border-[#dce3ff] bg-[#fbfcff]"
                 : "border-[#edf0f5]",
             ].join(" ")}
           >
+            <MediaPreview path={convertedFilePath} format={convertedFormat} />
+
+            <div className="relative flex w-full flex-col items-center">
             <span
               className="
                 grid size-12 place-items-center
@@ -904,6 +913,7 @@ function App() {
                 {t("saveFile")}
               </button>
             )}
+            </div>
           </div>
         </div>
       </section>

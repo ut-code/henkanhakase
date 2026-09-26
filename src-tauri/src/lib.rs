@@ -38,6 +38,16 @@ async fn probe_media_dimensions(
 }
 
 #[tauri::command]
+async fn generate_thumbnail(
+    app: tauri::AppHandle,
+    request: MediaProbeRequest,
+) -> Result<Vec<u8>, ApiError> {
+    conversion::generate_thumbnail(&app, request)
+        .await
+        .map_err(ApiError::from)
+}
+
+#[tauri::command]
 fn cleanup_temp_file(path: String) {
     conversion::remove_temp_file(&path);
 }
@@ -57,6 +67,7 @@ pub fn run() {
             convert_file,
             probe_media_dimensions,
             cancel_conversion,
+            generate_thumbnail,
             cleanup_temp_file
         ])
         // ウィンドウイベントの監視を追加（アプリ終了時に一時ディレクトリごと削除）
