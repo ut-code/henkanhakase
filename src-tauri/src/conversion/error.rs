@@ -4,16 +4,10 @@ use serde::Serialize;
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     ConversionCancelled,
-    InvalidOptions,
     FfmpegUnavailable,
     FfmpegStartFailed,
     ConversionFailed,
-    ProbeFailed,
-    InputFileNotFound,
     TempDirCreationFailed,
-    TimestampFetchFailed,
-    OutputFileNotGenerated,
-    ThumbnailFailed,
 }
 
 #[derive(Debug, Serialize)]
