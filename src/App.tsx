@@ -1,7 +1,10 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { copyFile } from "@tauri-apps/plugin-fs";
+import { copyFile, readFile } from "@tauri-apps/plugin-fs";
+import { join, tempDir } from "@tauri-apps/api/path";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { toBlobURL } from "@ffmpeg/util";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
@@ -22,6 +25,7 @@ import {
   type ImageFormat,
   isAudioFormat,
   type MediaDimensions,
+  mimeTypes,
   SUPPORTED_FORMATS,
   VIDEO_FORMATS,
   type VideoFormat,
@@ -33,13 +37,30 @@ import {
   normalizeVideoDimension,
 } from "./utils/dimension.ts";
 import { apiErrorMessage } from "./utils/error.ts";
+import { buildFfmpegArgs } from "./utils/ffmpeg.ts";
+import { buildProbeArgs, parsePngDimensions } from "./utils/ffmpeg-command.ts";
 import { detectFormatFromPath, getExtensionFromPath } from "./utils/path.ts";
+
+async function createTauriTempPath(
+  prefix: string,
+  extension: string,
+): Promise<string> {
+  const directory = await tempDir();
+  return join(
+    directory,
+    "henkanhakase",
+    `${prefix}_${crypto.randomUUID()}.${extension}`,
+  );
+}
 
 function App() {
   const { locale, setLocale, t } = useTranslation();
   const [sourceFileName, setSourceFileName] = useState<string | null>(null);
   const [sourceFilePath, setSourceFilePath] = useState<string | null>(null);
   const [sourceFileType, setSourceFileType] = useState<Format | null>(null);
+  const [sourceFileObj, setSourceFileObj] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const ffmpegRef = useRef<FFmpeg | null>(null);
 
   const [convertedFilePath, setConvertedFilePath] = useState<string | null>(
     null,
@@ -146,32 +167,42 @@ function App() {
   // 古い一時ファイルを破棄するヘルパー
   const cleanupOldTempFile = useCallback((filePath: string | null) => {
     if (filePath) {
-      invoke("cleanup_temp_file", { path: filePath }).catch(console.error);
+      if (isTauri()) {
+        invoke("cleanup_temp_file", { path: filePath }).catch(console.error);
+      } else if (filePath.startsWith("blob:")) {
+        URL.revokeObjectURL(filePath);
+      }
     }
   }, []);
 
-  // ファイルパスを受け取って内部状態を更新し、メディア情報の計測を行う共通処理
-  const processSelectedFilePath = useCallback(
-    async (filePath: string) => {
-      const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
-      const detectedFormat = detectFormatFromPath(filePath);
+  // ファイルまたはパスを受け取って内部状態を更新し、メディア情報の計測を行う共通処理
+  const processSelectedInput = useCallback(
+    async (input: string | File) => {
+      const isFile = input instanceof File;
+      const fileName = isFile ? input.name : (input.split(/[/\\]/).pop() ?? input);
+      const detectedFormat = detectFormatFromPath(fileName);
 
       if (!detectedFormat) {
         setError(
           t("unsupportedFormat", {
-            type: getExtensionFromPath(filePath),
+            type: getExtensionFromPath(fileName),
             formats: SUPPORTED_FORMATS.join(", "),
           }),
         );
         return;
       }
 
+      const filePath = isFile ? URL.createObjectURL(input) : input;
       console.log(
         `fileName: ${fileName},\nfilePath: ${filePath},\ndetectedFormat: ${detectedFormat}`,
       );
       setSourceFileName(fileName);
-      setSourceFilePath(filePath);
+      setSourceFilePath((prev) => {
+        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return filePath;
+      });
       setSourceFileType(detectedFormat);
+      setSourceFileObj(isFile ? input : null);
 
       // 新しいファイルが選ばれたら旧一時ファイルを消去
       setConvertedFilePath((prevPath) => {
@@ -208,15 +239,43 @@ function App() {
       setIsProbingDimensions(true);
 
       try {
-        const dimensions = await invoke<MediaDimensions>(
-          "probe_media_dimensions",
-          {
-            request: {
-              inputPath: filePath,
-              inputFormat: formatToExtension(detectedFormat),
-            },
-          },
-        );
+        let dimensions: MediaDimensions;
+        if (isFile) {
+          if (
+            detectedFormat === "GIF" ||
+            IMAGE_FORMATS.includes(detectedFormat as ImageFormat)
+          ) {
+            const img = new Image();
+            await new Promise<void>((resolve, reject) => {
+              img.onload = () => resolve();
+              img.onerror = () => reject(new Error("Image load failed"));
+              img.src = filePath;
+            });
+            dimensions = { width: img.naturalWidth, height: img.naturalHeight };
+          } else {
+            const video = document.createElement("video");
+            video.preload = "metadata";
+            await new Promise<void>((resolve, reject) => {
+              video.onloadedmetadata = () => resolve();
+              video.onerror = () =>
+                reject(new Error("Video metadata load failed"));
+              video.src = filePath;
+            });
+            dimensions = { width: video.videoWidth, height: video.videoHeight };
+          }
+        } else {
+          const probePath = await createTauriTempPath("probe", "png");
+          try {
+            await invoke("run_ffmpeg", {
+              args: buildProbeArgs(filePath, probePath),
+            });
+            dimensions = parsePngDimensions(await readFile(probePath));
+          } finally {
+            await invoke("cleanup_temp_file", { path: probePath }).catch(
+              console.error,
+            );
+          }
+        }
 
         if (probeId !== dimensionProbeId.current) return;
 
@@ -237,8 +296,13 @@ function App() {
     [cleanupOldTempFile, t],
   );
 
-  // Tauri 公式のネイティブファイル選択ダイアログを開く
+  // ネイティブまたはブラウザのファイル選択ダイアログを開く
   const selectFileWithDialog = async () => {
+    if (!isTauri()) {
+      fileInputRef.current?.click();
+      return;
+    }
+
     try {
       const selected = await open({
         multiple: false,
@@ -246,7 +310,7 @@ function App() {
       });
 
       if (selected && typeof selected === "string") {
-        await processSelectedFilePath(selected);
+        await processSelectedInput(selected);
       }
     } catch (err) {
       setError(t("fileSelectError", { error: String(err) }));
@@ -255,6 +319,7 @@ function App() {
 
   // Tauri の Drag & Drop イベントリスナーを登録
   useEffect(() => {
+    if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
 
     const setupDragDrop = async () => {
@@ -262,7 +327,7 @@ function App() {
         if (event.payload.type === "drop") {
           const paths = event.payload.paths;
           if (paths && paths.length > 0) {
-            processSelectedFilePath(paths[0]);
+            processSelectedInput(paths[0]);
           }
         }
       });
@@ -273,7 +338,7 @@ function App() {
     return () => {
       if (unlisten) unlisten();
     };
-  }, [processSelectedFilePath]);
+  }, [processSelectedInput]);
 
   const buildConversionOptions = () => {
     const resizeOptions =
@@ -382,7 +447,13 @@ function App() {
 
   const cancelConversion = async () => {
     try {
-      await invoke("cancel_conversion");
+      if (isTauri()) {
+        await invoke("cancel_conversion");
+      } else if (ffmpegRef.current) {
+        ffmpegRef.current.terminate();
+        ffmpegRef.current = null;
+        setIsConverting(false);
+      }
     } catch (cancelError) {
       console.error(t("cancelFailed"), cancelError);
     }
@@ -400,16 +471,60 @@ function App() {
       const inputExtension = formatToExtension(sourceFormat);
       const stem = sourceFileName.replace(/\.[^.]+$/, "");
 
-      // Rust側へファイルの絶対パスを引数として渡し、出力された一時ファイルの絶対パスを受け取る
-      const outputTempPath = await invoke<string>("convert_file", {
-        request: {
-          inputPath: sourceFilePath,
-          stem,
-          inputFormat: inputExtension,
-          outputFormat: extension,
-          options: buildConversionOptions(),
-        },
-      });
+      let outputTempPath: string;
+      if (isTauri()) {
+        outputTempPath = await createTauriTempPath("conversion", extension);
+        await invoke("run_ffmpeg", {
+          args: buildFfmpegArgs(
+            sourceFilePath,
+            outputTempPath,
+            sourceFormat,
+            convertedFormat,
+            buildConversionOptions(),
+          ),
+        });
+      } else {
+        if (!sourceFileObj) throw new Error("No source file");
+
+        if (!ffmpegRef.current) {
+          ffmpegRef.current = new FFmpeg();
+        }
+        const ffmpeg = ffmpegRef.current;
+        if (!ffmpeg.loaded) {
+          const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
+          await ffmpeg.load({
+            coreURL: await toBlobURL(
+              `${baseURL}/ffmpeg-core.js`,
+              "text/javascript",
+            ),
+            wasmURL: await toBlobURL(
+              `${baseURL}/ffmpeg-core.wasm`,
+              "application/wasm",
+            ),
+          });
+        }
+
+        const inputName = `input.${inputExtension}`;
+        const outputName = `output.${extension}`;
+
+        const fileData = await sourceFileObj.arrayBuffer();
+        await ffmpeg.writeFile(inputName, new Uint8Array(fileData));
+
+        const args = buildFfmpegArgs(
+          inputName,
+          outputName,
+          sourceFormat,
+          convertedFormat,
+          buildConversionOptions(),
+        );
+
+        await ffmpeg.exec(args);
+        const outputData = await ffmpeg.readFile(outputName);
+        const mimeType =
+          mimeTypes[convertedFormat][0] || "application/octet-stream";
+        const blob = new Blob([outputData as BlobPart], { type: mimeType });
+        outputTempPath = URL.createObjectURL(blob);
+      }
 
       const sequenceKey = stem;
       const sequence =
@@ -434,16 +549,22 @@ function App() {
     if (!convertedFilePath || !convertedFileName) return;
 
     try {
-      const destinationPath = await save({
-        defaultPath: convertedFileName,
-      });
+      if (isTauri()) {
+        const destinationPath = await save({
+          defaultPath: convertedFileName,
+        });
 
-      if (!destinationPath) {
-        return;
+        if (!destinationPath) {
+          return;
+        }
+
+        await copyFile(convertedFilePath, destinationPath);
+      } else {
+        const a = document.createElement("a");
+        a.href = convertedFilePath;
+        a.download = convertedFileName;
+        a.click();
       }
-
-      // 追記・コピー処理（Tauri FSのcopyFileでパス指定転送）
-      await copyFile(convertedFilePath, destinationPath);
     } catch (error) {
       console.error(t("saveFailed"), error);
     }
@@ -671,6 +792,14 @@ function App() {
               max-[980px]:h-57.5
             "
             onClick={selectFileWithDialog}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const file = e.dataTransfer.files?.[0];
+              if (file) {
+                processSelectedInput(file);
+              }
+            }}
           >
             <MediaPreview path={sourceFilePath} format={sourceFormat} />
 
@@ -705,6 +834,19 @@ function App() {
             </span>
             </span>
           </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                processSelectedInput(file);
+              }
+              e.target.value = "";
+            }}
+          />
 
           {error && (
             <p className="my-2 text-[11px] leading-[1.6] text-[#d76269]">

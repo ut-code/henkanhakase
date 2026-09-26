@@ -1,6 +1,6 @@
 mod conversion;
 
-use conversion::{ApiError, ConversionRequest, MediaDimensions, MediaProbeRequest};
+use conversion::ApiError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{State, WindowEvent};
@@ -11,13 +11,13 @@ pub struct AppState {
 }
 
 #[tauri::command]
-async fn convert_file(
+async fn run_ffmpeg(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
-    request: ConversionRequest,
-) -> Result<String, ApiError> {
+    args: Vec<String>,
+) -> Result<(), ApiError> {
     state.cancel_flag.store(false, Ordering::Relaxed);
-    conversion::convert(&app, request, state.cancel_flag.clone())
+    conversion::run_ffmpeg(&app, args, state.cancel_flag.clone())
         .await
         .map_err(ApiError::from)
 }
@@ -25,26 +25,6 @@ async fn convert_file(
 #[tauri::command]
 fn cancel_conversion(state: State<'_, AppState>) {
     state.cancel_flag.store(true, Ordering::Relaxed);
-}
-
-#[tauri::command]
-async fn probe_media_dimensions(
-    app: tauri::AppHandle,
-    request: MediaProbeRequest,
-) -> Result<MediaDimensions, ApiError> {
-    conversion::probe_dimensions(&app, request)
-        .await
-        .map_err(ApiError::from)
-}
-
-#[tauri::command]
-async fn generate_thumbnail(
-    app: tauri::AppHandle,
-    request: MediaProbeRequest,
-) -> Result<Vec<u8>, ApiError> {
-    conversion::generate_thumbnail(&app, request)
-        .await
-        .map_err(ApiError::from)
 }
 
 #[tauri::command]
@@ -64,10 +44,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            convert_file,
-            probe_media_dimensions,
+            run_ffmpeg,
             cancel_conversion,
-            generate_thumbnail,
             cleanup_temp_file
         ])
         // ウィンドウイベントの監視を追加（アプリ終了時に一時ディレクトリごと削除）

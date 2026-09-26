@@ -1,4 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { join, tempDir } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -7,8 +8,8 @@ import {
   type Format,
   type ImageFormat,
   type VideoFormat,
-  formatToExtension,
 } from "../formats.ts";
+import { buildThumbnailArgs } from "../utils/ffmpeg-command.ts";
 
 type MediaPreviewProps = {
   path: string | null;
@@ -54,30 +55,66 @@ export function MediaPreview({ path, format }: MediaPreviewProps) {
       format === "GIF" ||
       VIDEO_FORMATS.includes(format as VideoFormat)
     ) {
-      invoke<number[] | Uint8Array>("generate_thumbnail", {
-        request: {
-          inputPath: path,
-          inputFormat: formatToExtension(format),
-        },
-      })
-        .then((result) => {
-          const bytes =
-            result instanceof Uint8Array ? result : new Uint8Array(result);
-          show(
-            new Blob([bytes as BlobPart], {
-              type: format === "GIF" ? "image/png" : "image/jpeg",
-            }),
-          );
-        })
-        .catch((error) => {
-          console.error("サムネイルの生成に失敗しました:", error);
-        });
+      if (!isTauri()) {
+        if (format === "GIF") {
+          setThumbnailUrl(path);
+        } else {
+          const video = document.createElement("video");
+          video.src = path;
+          video.muted = true;
+          video.currentTime = 0.001;
+          video.onseeked = () => {
+            if (cancelled) return;
+            const canvas = document.createElement("canvas");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext("2d")?.drawImage(video, 0, 0);
+            canvas.toBlob((blob) => {
+              if (blob && !cancelled) show(blob);
+            }, "image/jpeg");
+          };
+        }
+      } else {
+        Promise.all([
+          tempDir(),
+          crypto.randomUUID(),
+        ])
+          .then(async ([directory, id]) => {
+            const thumbnailPath = await join(
+              directory,
+              "henkanhakase",
+              `thumbnail_${id}.${format === "GIF" ? "png" : "jpg"}`,
+            );
+            try {
+              await invoke("run_ffmpeg", {
+                args: buildThumbnailArgs(path, thumbnailPath, format),
+              });
+              const bytes = await readFile(thumbnailPath);
+              show(
+                new Blob([bytes as BlobPart], {
+                  type: format === "GIF" ? "image/png" : "image/jpeg",
+                }),
+              );
+            } finally {
+              await invoke("cleanup_temp_file", { path: thumbnailPath }).catch(
+                console.error,
+              );
+            }
+          })
+          .catch((error) => {
+            console.error("サムネイルの生成に失敗しました:", error);
+          });
+      }
     } else if (IMAGE_FORMATS.includes(format as ImageFormat)) {
-      readFile(path)
-        .then((bytes) => show(new Blob([bytes as BlobPart])))
-        .catch((error) => {
-          console.error("プレビューの読み込みに失敗しました:", error);
-        });
+      if (!isTauri()) {
+        setThumbnailUrl(path);
+      } else {
+        readFile(path)
+          .then((bytes) => show(new Blob([bytes as BlobPart])))
+          .catch((error) => {
+            console.error("プレビューの読み込みに失敗しました:", error);
+          });
+      }
     }
 
     return () => {
@@ -89,6 +126,11 @@ export function MediaPreview({ path, format }: MediaPreviewProps) {
   useEffect(() => {
     setAnimatedUrl(null);
     if (!path || !isGif || !hovered) return;
+
+    if (!isTauri()) {
+      setAnimatedUrl(path);
+      return;
+    }
 
     let cancelled = false;
     let objectUrl: string | null = null;
