@@ -9,6 +9,7 @@ import UploadIcon from "./assets/upload.svg";
 import { AudioOptions } from "./components/AudioOptions";
 import { FormatDropdown } from "./components/FormatDropdown";
 import { ImageOptions } from "./components/ImageOptions";
+import { MediaModal } from "./components/MediaModal";
 import { MediaPreview } from "./components/MediaPreview";
 import { ResizeOptions } from "./components/ResizeOptions";
 import { VideoOptions } from "./components/VideoOptions";
@@ -62,6 +63,13 @@ function App() {
   const [convertedSettingsKey, setConvertedSettingsKey] = useState<
     string | null
   >(null);
+
+  // モーダルプレビュー用のステート
+  const [modalItem, setModalItem] = useState<{
+    path: string;
+    format: Format;
+    title: string;
+  } | null>(null);
 
   const [convertedFormat, setConvertedFormat] = useState<Format>("PNG");
   const [detailsOpen, setDetailsOpen] = useState(true);
@@ -852,21 +860,39 @@ function App() {
               <span className="text-xs">{t("chooseFile")}</span>
             </button>
           ) : (
-            <div className="flex flex-1 flex-col justify-between">
+            <div className="flex flex-1 flex-col justify-between min-h-0">
               <div className="max-h-56 overflow-y-auto pr-1">
                 <ul className="flex flex-col gap-2">
                   {sourceFiles.map((f) => (
                     <li
                       key={f.id}
-                      className="flex items-center justify-between rounded-lg border border-[#e8ecf4] bg-[#fafbff] p-2 text-xs"
+                      className="flex items-center justify-between rounded-lg border border-[#e8ecf4] bg-[#fafbff] p-2 text-xs overflow-hidden"
                     >
-                      <div className="flex min-w-0 items-center gap-2 pr-2">
-                        <div className="size-10 shrink-0 overflow-hidden rounded">
+                      <div className="flex min-w-0 items-center gap-2 pr-2 flex-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setModalItem({
+                              path: f.path,
+                              format: f.format,
+                              title: f.name,
+                            })
+                          }
+                          className="group relative size-10 shrink-0 cursor-pointer overflow-hidden rounded border border-[#dfe5ef] [&_img]:size-full [&_img]:object-cover [&_video]:size-full [&_video]:object-cover"
+                          title="クリックで拡大表示"
+                        >
                           <MediaPreview path={f.path} format={f.format} />
-                        </div>
-                        <div className="truncate text-left">
-                          <div className="font-medium text-[#3c4a60] truncate">{f.name}</div>
-                          <div className="text-[10px] text-[#8e9aab]">{f.format}</div>
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100 text-white text-[10px]">
+                            🔍
+                          </div>
+                        </button>
+                        <div className="truncate text-left flex-1 min-w-0">
+                          <div className="font-medium text-[#3c4a60] truncate">
+                            {f.name}
+                          </div>
+                          <div className="text-[10px] text-[#8e9aab]">
+                            {f.format}
+                          </div>
                         </div>
                       </div>
                       <button
@@ -882,7 +908,7 @@ function App() {
                 </ul>
               </div>
 
-              <div className="mt-4 flex items-center justify-between border-t border-[#edf0f5] pt-3">
+              <div className="mt-4 flex items-center justify-between border-t border-[#edf0f5] pt-3 shrink-0">
                 <span className="text-xs text-[#8390a3]">
                   計 {sourceFiles.length} 件
                 </span>
@@ -1047,7 +1073,7 @@ function App() {
 
           <div
             className={[
-              "flex flex-1 flex-col items-center justify-between rounded-[14px] border p-5.5 text-center text-[#8e9aab]",
+              "flex flex-1 flex-col items-center justify-between rounded-[14px] border p-5.5 text-center text-[#8e9aab] min-h-0",
               convertedResults.length > 0
                 ? "border-[#dce3ff] bg-[#fbfcff]"
                 : "border-[#edf0f5] bg-[#fcfdff] justify-center",
@@ -1082,9 +1108,9 @@ function App() {
                 <span className="text-xs">{t("addAndConvert")}</span>
               </>
             ) : (
-              <div className="flex w-full flex-1 flex-col justify-between">
-                <div>
-                  <strong className="block mb-3 text-sm text-[#3c4a60]">
+              <div className="flex w-full flex-1 flex-col justify-between min-h-0">
+                <div className="flex flex-col min-h-0">
+                  <strong className="block mb-3 text-sm text-[#3c4a60] shrink-0">
                     {successfulConversionsCount} / {convertedResults.length} 件
                     変換完了
                   </strong>
@@ -1094,25 +1120,43 @@ function App() {
                       {convertedResults.map((res) => (
                         <li
                           key={res.id}
-                          className="flex items-center justify-between rounded-lg border border-[#e8ecf4] bg-white p-2 text-xs"
+                          className="flex items-center justify-between rounded-lg border border-[#e8ecf4] bg-white p-2 text-xs overflow-hidden"
                         >
-                          <div className="flex min-w-0 items-center gap-2 pr-2">
+                          <div className="flex min-w-0 items-center gap-2 pr-2 flex-1">
                             {res.convertedFilePath ? (
                               <>
-                                <div className="size-10 shrink-0 overflow-hidden rounded">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setModalItem({
+                                      path: res.convertedFilePath ?? "",
+                                      format:
+                                        res.convertedFileFormat ??
+                                        convertedFormat,
+                                      title: res.convertedFileName || "",
+                                    })
+                                  }
+                                  className="group relative size-10 shrink-0 cursor-pointer overflow-hidden rounded border border-[#dfe5ef] [&_img]:size-full [&_img]:object-cover [&_video]:size-full [&_video]:object-cover"
+                                  title="クリックで拡大表示"
+                                >
                                   <MediaPreview
                                     path={res.convertedFilePath}
-                                    format={res.convertedFileFormat ?? convertedFormat}
+                                    format={
+                                      res.convertedFileFormat ?? convertedFormat
+                                    }
                                   />
-                                </div>
-                                <div className="truncate text-left flex-1">
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100 text-white text-[10px]">
+                                    🔍
+                                  </div>
+                                </button>
+                                <div className="truncate text-left flex-1 min-w-0">
                                   <span className="text-[#3c4a60] font-medium block truncate">
                                     ✓ {res.convertedFileName}
                                   </span>
                                 </div>
                               </>
                             ) : (
-                              <div className="truncate text-left flex-1">
+                              <div className="truncate text-left flex-1 min-w-0">
                                 <span className="text-[#d76269] block truncate">
                                   ✕ {res.sourceName}: {res.error}
                                 </span>
@@ -1141,6 +1185,7 @@ function App() {
                     className="
                       mt-4
                       w-full
+                      shrink-0
                       rounded-[9px]
                       border-0
                       bg-linear-to-br from-[#6177f6] to-[#7c69e9]
@@ -1269,6 +1314,15 @@ function App() {
           </div>
         )}
       </footer>
+
+      {/* Media Modal */}
+      <MediaModal
+        isOpen={Boolean(modalItem)}
+        onClose={() => setModalItem(null)}
+        path={modalItem?.path ?? null}
+        format={modalItem?.format ?? null}
+        title={modalItem?.title}
+      />
     </main>
   );
 }
