@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { Format } from "../formats";
+import { useTranslation } from "../i18n";
 import { MediaPreview } from "./MediaPreview";
 
 interface MediaModalProps {
@@ -17,6 +18,8 @@ export function MediaModal({
   format,
   title,
 }: MediaModalProps) {
+  const { t } = useTranslation();
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -32,11 +35,13 @@ export function MediaModal({
 
   if (!isOpen || !path || !format) return null;
 
+  const modalTitle = title || t("preview");
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 backdrop-blur-xs animate-in fade-in duration-200">
       <button
         type="button"
-        aria-label="モーダルを閉じる"
+        aria-label={t("closeModal")}
         className="absolute inset-0 size-full cursor-default border-none bg-black/70 p-0"
         onClick={onClose}
       />
@@ -45,20 +50,20 @@ export function MediaModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={title || "プレビュー"}
+        aria-label={modalTitle}
         tabIndex={-1}
         className="relative z-10 flex max-h-[90vh] max-w-[90vw] w-fit min-w-[320px] mx-auto flex-col overflow-hidden rounded-2xl bg-white p-4 shadow-2xl"
       >
         {/* Header */}
         <div className="mb-3 flex items-center justify-between border-b border-[#edf0f5] pb-2 shrink-0">
           <span className="truncate text-sm font-bold text-[#26354a]">
-            {title || "プレビュー"}
+            {modalTitle}
           </span>
           <button
             type="button"
             onClick={onClose}
             className="grid size-7 place-items-center rounded-full bg-[#f0f3f7] text-sm text-[#657184] transition hover:bg-[#d76269] hover:text-white"
-            title="閉じる (Esc)"
+            title={t("closeTooltip")}
           >
             ✕
           </button>
