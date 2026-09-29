@@ -82,6 +82,9 @@ function App() {
     null,
   );
   const [aspectRatioLocked, setAspectRatioLocked] = useState(true);
+  const [resizeMode, setResizeMode] = useState<"individual" | "uniform">(
+    "individual",
+  );
   const [resizeWidth, setResizeWidth] = useState(1);
   const [resizeHeight, setResizeHeight] = useState(1);
   const [antiAliasing, setAntiAliasing] = useState(true);
@@ -154,6 +157,7 @@ function App() {
             height: resizeHeight,
             aspectRatioLocked,
             antiAliasing,
+            resizeMode,
           }
         : null,
     pngCompressionLevel,
@@ -376,15 +380,54 @@ function App() {
     };
   }, [processSelectedFilePaths]);
 
-  const buildConversionOptions = () => {
-    const resizeOptions =
-      !isAudioFormat(convertedFormat) && mediaDimensions
-        ? {
+  const buildConversionOptions = (
+    targetFileDimensions?: MediaDimensions | null,
+  ) => {
+    let resizeOptions = {};
+
+    if (!isAudioFormat(convertedFormat)) {
+      if (resizeMode === "uniform" && mediaDimensions) {
+        resizeOptions = {
+          width: resizeWidth,
+          height: resizeHeight,
+          antiAliasing,
+        };
+      } else if (resizeMode === "individual" && targetFileDimensions) {
+        if (aspectRatioLocked && mediaDimensions) {
+          const scale = resizeWidth / mediaDimensions.width;
+          let calculatedWidth = Math.round(targetFileDimensions.width * scale);
+          let calculatedHeight = Math.round(
+            targetFileDimensions.height * scale,
+          );
+
+          if (isVideoOutput) {
+            calculatedWidth = normalizeVideoDimension(calculatedWidth);
+            calculatedHeight = normalizeVideoDimension(calculatedHeight);
+          } else {
+            calculatedWidth = clampDimension(calculatedWidth);
+            calculatedHeight = clampDimension(calculatedHeight);
+          }
+
+          resizeOptions = {
+            width: calculatedWidth,
+            height: calculatedHeight,
+            antiAliasing,
+          };
+        } else {
+          resizeOptions = {
             width: resizeWidth,
             height: resizeHeight,
             antiAliasing,
-          }
-        : {};
+          };
+        }
+      } else if (mediaDimensions) {
+        resizeOptions = {
+          width: resizeWidth,
+          height: resizeHeight,
+          antiAliasing,
+        };
+      }
+    }
 
     switch (convertedFormat) {
       case "PNG":
@@ -509,13 +552,30 @@ function App() {
         const inputExtension = formatToExtension(file.format);
         const stem = file.name.replace(/\.[^.]+$/, "");
 
+        let fileDimensions: MediaDimensions | null = null;
+        if (!isAudioFormat(convertedFormat) && resizeMode === "individual") {
+          try {
+            fileDimensions = await invoke<MediaDimensions>(
+              "probe_media_dimensions",
+              {
+                request: {
+                  inputPath: file.path,
+                  inputFormat: inputExtension,
+                },
+              },
+            );
+          } catch (probeErr) {
+            console.warn("Probe error for file:", file.name, probeErr);
+          }
+        }
+
         const outputTempPath = await invoke<string>("convert_file", {
           request: {
             inputPath: file.path,
             stem,
             inputFormat: inputExtension,
             outputFormat: extension,
-            options: buildConversionOptions(),
+            options: buildConversionOptions(fileDimensions),
           },
         });
 
@@ -1255,19 +1315,54 @@ function App() {
           <div className="border-t border-[#edf0f5] px-5.5 py-4">
             {sourceFiles.length > 0 && !isAudioFormat(convertedFormat) ? (
               <div className="flex flex-col gap-5">
-                <ResizeOptions
-                  dimensions={mediaDimensions}
-                  aspectRatioLocked={aspectRatioLocked}
-                  antiAliasing={antiAliasing}
-                  width={resizeWidth}
-                  height={resizeHeight}
-                  isLoading={isProbingDimensions}
-                  error={dimensionProbeError}
-                  onAspectRatioLockedChange={handleAspectRatioLockedChange}
-                  onAntiAliasingChange={setAntiAliasing}
-                  onWidthChange={handleResizeWidthChange}
-                  onHeightChange={handleResizeHeightChange}
-                />
+                {sourceFiles.length > 1 && (
+                  <div className="flex flex-col gap-1.5 rounded-lg bg-[#fafbff] p-3 border border-[#e8ecf4]">
+                    <span className="text-xs font-semibold text-[#3c4a60]">
+                      複数ファイルのリサイズ処理:
+                    </span>
+                    <div className="flex items-center gap-4 text-xs text-[#5b687c]">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="resizeMode"
+                          value="individual"
+                          checked={resizeMode === "individual"}
+                          onChange={() => setResizeMode("individual")}
+                          className="accent-[#586cec]"
+                        />
+                        それぞれの縦横比で変換
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="resizeMode"
+                          value="uniform"
+                          checked={resizeMode === "uniform"}
+                          onChange={() => setResizeMode("uniform")}
+                          className="accent-[#586cec]"
+                        />
+                        最初のファイルの縦横比に固定
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* 複数ファイル時で「それぞれの縦横比で変換」が選ばれている場合はリサイズオプションを非表示 */}
+                {(sourceFiles.length <= 1 || resizeMode === "uniform") && (
+                  <ResizeOptions
+                    dimensions={mediaDimensions}
+                    aspectRatioLocked={aspectRatioLocked}
+                    antiAliasing={antiAliasing}
+                    width={resizeWidth}
+                    height={resizeHeight}
+                    isLoading={isProbingDimensions}
+                    error={dimensionProbeError}
+                    onAspectRatioLockedChange={handleAspectRatioLockedChange}
+                    onAntiAliasingChange={setAntiAliasing}
+                    onWidthChange={handleResizeWidthChange}
+                    onHeightChange={handleResizeHeightChange}
+                  />
+                )}
 
                 <div className="h-px w-full bg-[#edf0f5]" />
 
