@@ -9,6 +9,8 @@
     "dialog:default",
     "fs:default",
     "fs:allow-write-file",
+    "fs:allow-copy-file",
+    "fs:scope-temp-recursive",
     "shell:default"
   ]
 }
