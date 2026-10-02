@@ -1,5 +1,6 @@
 mod error;
 mod ffmpeg;
+mod progress;
 mod types;
 
 use std::{
@@ -10,12 +11,13 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::ShellExt;
 
 pub use error::{ApiError, ConversionError, ErrorCode};
-pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
+use progress::{percentage, ConversionProgress};
 use types::FileFormat;
+pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
 
 /// 指定された一時ファイルを明示的に削除する関数
 pub fn remove_temp_file(path_str: &str) {
@@ -62,6 +64,10 @@ pub async fn convert(
         request.output_format.extension()
     )));
 
+    let duration_ms = request
+        .duration_ms
+        .or(probe_duration_ms(app, &input_path).await);
+
     let args = ffmpeg::build_args(
         &input_path,
         output_file.path(),
@@ -70,6 +76,18 @@ pub async fn convert(
         &request.options,
     )
     .map_err(|_| ConversionError::new(ErrorCode::InvalidOptions))?;
+
+    let emit_progress = |progress, state| {
+        let _ = app.emit(
+            "conversion-progress",
+            ConversionProgress {
+                conversion_id: request.conversion_id.clone(),
+                progress,
+                state,
+            },
+        );
+    };
+    emit_progress(None, "running");
 
     let (mut rx, child) = app
         .shell()
@@ -85,13 +103,25 @@ pub async fn convert(
             return Err(ConversionError::new(ErrorCode::ConversionCancelled));
         }
 
-        if let Ok(Some(tauri_plugin_shell::process::CommandEvent::Terminated(payload))) =
-            tokio::time::timeout(Duration::from_millis(100), rx.recv()).await
-        {
-            if payload.code != Some(0) {
-                return Err(ConversionError::new(ErrorCode::ConversionFailed));
+        if let Ok(Some(event)) = tokio::time::timeout(Duration::from_millis(100), rx.recv()).await {
+            match event {
+                tauri_plugin_shell::process::CommandEvent::Stdout(bytes) => {
+                    if let Ok(output) = std::str::from_utf8(&bytes) {
+                        for line in output.lines() {
+                            if let Some(progress) = percentage(line.trim(), duration_ms) {
+                                emit_progress(Some(progress), "running");
+                            }
+                        }
+                    }
+                }
+                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                    if payload.code != Some(0) {
+                        return Err(ConversionError::new(ErrorCode::ConversionFailed));
+                    }
+                    break;
+                }
+                _ => {}
             }
-            break;
         }
     }
 
@@ -100,7 +130,33 @@ pub async fn convert(
     }
 
     let final_path = output_file.disarm();
+    emit_progress(Some(100), "completed");
     Ok(final_path.to_string_lossy().into_owned())
+}
+
+async fn probe_duration_ms(app: &AppHandle, input_path: &Path) -> Option<u64> {
+    let output = app
+        .shell()
+        .sidecar("ffmpeg")
+        .ok()?
+        .args([
+            "-hide_banner".into(),
+            "-i".into(),
+            input_path.to_string_lossy().into_owned(),
+        ])
+        .output()
+        .await
+        .ok()?;
+    parse_duration_ms(&String::from_utf8_lossy(&output.stderr))
+}
+
+fn parse_duration_ms(output: &str) -> Option<u64> {
+    let value = output.split("Duration: ").nth(1)?.split(',').next()?.trim();
+    let mut fields = value.split(':');
+    let hours = fields.next()?.parse::<u64>().ok()?;
+    let minutes = fields.next()?.parse::<u64>().ok()?;
+    let seconds = fields.next()?.parse::<f64>().ok()?;
+    Some(((hours * 3_600 + minutes * 60) as f64 * 1_000.0 + seconds * 1_000.0).round() as u64)
 }
 
 pub async fn probe_dimensions(
@@ -184,7 +240,8 @@ pub async fn generate_thumbnail(
         input_path.to_string_lossy().into_owned(),
         "-an".to_string(),
         "-vf".to_string(),
-        "thumbnail=30,scale=iw*sar:ih,setsar=1,scale=640:640:force_original_aspect_ratio=decrease".to_string(),
+        "thumbnail=30,scale=iw*sar:ih,setsar=1,scale=640:640:force_original_aspect_ratio=decrease"
+            .to_string(),
         "-frames:v".to_string(),
         "1".to_string(),
         "-update".to_string(),

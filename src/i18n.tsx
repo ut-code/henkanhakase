@@ -75,6 +75,9 @@ const messages = {
     error_output_file_not_generated: "出力ファイルの作成に失敗しました",
     error_probe_failed: "元のサイズを取得できませんでした。",
     error_unexpected: "予期しないエラーが発生しました。",
+    progressPercent: "変換中 {progress}%", progressWorking: "変換中…",
+    rangeHighQuality: "{value}（高品質）", rangeLowQuality: "{value}（低品質）", colorCount: "{value} 色", mono: "{value} ch（モノラル）", stereo: "{value} ch（ステレオ）",
+    hiRes: "96 kHz（ハイレゾ）", cdStandard: "16 bit（CD標準）", fast: "0（高速）", highCompression12: "12（高圧縮）", standardQuality: "標準音質", bestQuality: "最高音質", voiceLight: "軽量・音声向き",
   },
   en: {
     appName: "Henkan Hakase",
@@ -146,6 +149,9 @@ const messages = {
     error_output_file_not_generated: "Failed to generate the output file",
     error_probe_failed: "Could not read source dimensions.",
     error_unexpected: "An unexpected error occurred.",
+    progressPercent: "Converting {progress}%", progressWorking: "Converting…",
+    rangeHighQuality: "{value} (high quality)", rangeLowQuality: "{value} (low quality)", colorCount: "{value} colors", mono: "{value} ch (mono)", stereo: "{value} ch (stereo)",
+    hiRes: "96 kHz (hi-res)", cdStandard: "16 bit (CD standard)", fast: "0 (fast)", highCompression12: "12 (high compression)", standardQuality: "standard quality", bestQuality: "best quality", voiceLight: "lightweight for voice",
   },
 } as const;
 

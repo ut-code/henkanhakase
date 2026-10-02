@@ -342,6 +342,11 @@ pub struct ConversionRequest {
     pub input_path: String,
     /// ファイル名 (拡張子なし)
     pub stem: String,
+    /// フロントエンド側で進捗イベントを識別するためのID
+    pub conversion_id: String,
+    /// 既知の場合に指定する入力メディアの長さ（ミリ秒）
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
     pub input_format: FileFormat,
     pub output_format: FileFormat,
 

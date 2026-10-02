@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { copyFile } from "@tauri-apps/plugin-fs";
@@ -7,6 +8,7 @@ import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
 import UploadIcon from "./assets/upload.svg";
 import { AudioOptions } from "./components/AudioOptions";
+import { ConversionProgress } from "./components/ConversionProgress";
 import { FormatDropdown } from "./components/FormatDropdown";
 import { ImageOptions } from "./components/ImageOptions";
 import { MediaModal } from "./components/MediaModal";
@@ -74,6 +76,8 @@ function App() {
   const [convertedFormat, setConvertedFormat] = useState<Format>("PNG");
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [isConverting, setIsConverting] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState<number | null>(null);
+  const activeConversionId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mediaDimensions, setMediaDimensions] =
     useState<MediaDimensions | null>(null);
@@ -114,6 +118,14 @@ function App() {
     });
 
   const isVideoOutput = VIDEO_FORMATS.includes(convertedFormat as VideoFormat);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<{ conversionId: string; progress: number | null }>("conversion-progress", (event) => {
+      if (event.payload.conversionId === activeConversionId.current) setConversionProgress(event.payload.progress);
+    }).then((dispose) => { unlisten = dispose; });
+    return () => unlisten?.();
+  }, []);
 
   // 選択されているファイルの種別（画像・動画・音声）の混在チェック
   const mediaTypes = useMemo(() => {
@@ -538,6 +550,7 @@ function App() {
 
     const settingsKeyAtConversion = conversionSettingsKey;
     setIsConverting(true);
+    setConversionProgress(null);
     setError(null);
 
     // 一時ファイルのクリーンアップ
@@ -548,6 +561,9 @@ function App() {
 
     for (const file of sourceFiles) {
       try {
+        const conversionId = crypto.randomUUID();
+        activeConversionId.current = conversionId;
+        setConversionProgress(null);
         const extension = formatToExtension(convertedFormat);
         const inputExtension = formatToExtension(file.format);
         const stem = file.name.replace(/\.[^.]+$/, "");
@@ -573,6 +589,7 @@ function App() {
           request: {
             inputPath: file.path,
             stem,
+            conversionId,
             inputFormat: inputExtension,
             outputFormat: extension,
             options: buildConversionOptions(fileDimensions),
@@ -609,6 +626,7 @@ function App() {
     setConvertedResults(newResults);
     setConvertedSettingsKey(settingsKeyAtConversion);
     setIsConverting(false);
+    activeConversionId.current = null;
   };
 
   // 個別保存機能
@@ -1092,6 +1110,7 @@ function App() {
                   : t("convert")}
             </button>
           )}
+          {isConverting && <ConversionProgress progress={conversionProgress} />}
         </div>
 
         {/* Output Panel */}

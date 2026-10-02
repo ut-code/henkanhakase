@@ -45,7 +45,7 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
             <option value={22050}>22.05 kHz</option>
             <option value={44100}>44.1 kHz</option>
             <option value={48000}>48 kHz</option>
-            <option value={96000}>96 kHz (ハイレゾ)</option>
+            <option value={96000}>{t("hiRes")}</option>
           </select>
         </div>
 
@@ -63,8 +63,8 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
             className="rounded-[9px] border border-[#dfe5ef] bg-white px-3 py-2 text-xs text-[#40506a] outline-[#6578f7]"
           >
             <option value={0}>{t("auto")}</option>
-            <option value={1}>1 ch (モノラル)</option>
-            <option value={2}>2 ch (ステレオ)</option>
+            <option value={1}>{t("mono", { value: 1 })}</option>
+            <option value={2}>{t("stereo", { value: 2 })}</option>
           </select>
         </div>
       </div>
@@ -89,9 +89,9 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
               }
               className="rounded-[9px] border border-[#dfe5ef] bg-white px-3 py-2 text-xs text-[#40506a] outline-[#6578f7]"
             >
-              <option value={16}>16 bit (CD標準)</option>
-              <option value={24}>24 bit (高音質)</option>
-              <option value={32}>32 bit (Float/高精度)</option>
+              <option value={16}>{t("cdStandard")}</option>
+              <option value={24}>{t("rangeHighQuality", { value: "24 bit" })}</option>
+              <option value={32}>32 bit (Float)</option>
             </select>
           </div>
         )}
@@ -124,8 +124,8 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
               className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
             />
             <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-              <span>0 (高速)</span>
-              <span>12 (高圧縮)</span>
+              <span>{t("fast")}</span>
+              <span>{t("highCompression12")}</span>
             </div>
           </div>
         )}
@@ -156,8 +156,8 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
               className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
             />
             <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-              <span>-1 (低品質)</span>
-              <span>10 (高品質)</span>
+              <span>{t("rangeLowQuality", { value: -1 })}</span>
+              <span>{t("rangeHighQuality", { value: 10 })}</span>
             </div>
           </div>
         )}
@@ -178,13 +178,13 @@ export function AudioOptions({ format, options, onChange }: AudioOptionsProps) {
               }
               className="rounded-[9px] border border-[#dfe5ef] bg-white px-3 py-2 text-xs text-[#40506a] outline-[#6578f7]"
             >
-              <option value="64k">64 kbps (軽量・音声向き)</option>
+              <option value="64k">64 kbps ({t("voiceLight")})</option>
               <option value="96k">96 kbps</option>
-              <option value="128k">128 kbps (標準音質)</option>
+              <option value="128k">128 kbps ({t("standardQuality")})</option>
               <option value="160k">160 kbps</option>
-              <option value="192k">192 kbps (高音質)</option>
+              <option value="192k">192 kbps ({t("highQuality")})</option>
               <option value="256k">256 kbps</option>
-              <option value="320k">320 kbps (最高音質)</option>
+              <option value="320k">320 kbps ({t("bestQuality")})</option>
             </select>
             <span className="text-[10px] text-[#9aa6b7]">
               {t("bitrateHint")}
