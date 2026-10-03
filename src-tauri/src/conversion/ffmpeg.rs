@@ -78,7 +78,10 @@ fn build_default_args(
         args.extend(["-vf".into(), scale]);
     }
 
-    if matches!(output_format, FileFormat::Png | FileFormat::Jpeg) {
+    if matches!(
+        output_format,
+        FileFormat::Png | FileFormat::Jpeg | FileFormat::Webp | FileFormat::Bmp | FileFormat::Ico
+    ) {
         args.extend(["-frames:v".into(), "1".into()]);
     }
 

@@ -1,4 +1,11 @@
-export const IMAGE_FORMATS = ["PNG", "JPEG", "WebP", "GIF"] as const;
+export const IMAGE_FORMATS = [
+  "PNG",
+  "JPEG",
+  "WebP",
+  "GIF",
+  "BMP",
+  "ICO",
+] as const;
 export const VIDEO_FORMATS = ["MP4", "WebM", "AVI", "MOV"] as const;
 export const AUDIO_FORMATS = [
   "MP3",
@@ -49,7 +56,8 @@ export const mimeTypes: Record<Format, string[]> = {
   JPEG: ["image/jpeg", "image/pjpeg", "image/jpg"],
   WebP: ["image/webp"],
   GIF: ["image/gif"],
-
+  BMP: ["image/bmp", "image/x-bmp"],
+  ICO: ["image/x-icon", "image/vnd.microsoft.icon"],
   MP4: ["video/mp4"],
   WebM: ["video/webm"],
   AVI: ["video/x-msvideo", "video/avi", "video/msvideo", "video/vnd.avi"],
