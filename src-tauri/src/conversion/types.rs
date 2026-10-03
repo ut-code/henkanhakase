@@ -237,6 +237,13 @@ impl AudioOptions {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum IcoFitMode {
+    Pad,
+    Square,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversionOptions {
@@ -257,6 +264,10 @@ pub struct ConversionOptions {
     pub bmp_bit_depth: Option<u32>,
     pub bmp_compression: Option<bool>,
 
+    /// ICO 形式専用オプション
+    pub ico_sizes: Option<Vec<u32>>,
+    pub ico_fit_mode: Option<IcoFitMode>,
+
     /// 音声変換用オプション
     pub audio: Option<AudioOptions>,
 }
@@ -272,6 +283,13 @@ impl ConversionOptions {
             if let Some(height) = self.height {
                 if height > 256 {
                     return Err("ICO形式の高さは最大256ピクセルまでです".into());
+                }
+            }
+            if let Some(sizes) = &self.ico_sizes {
+                for s in sizes {
+                    if !matches!(s, 16 | 24 | 32 | 48 | 64 | 128 | 256) {
+                        return Err("ICOの解像度サイズ指定が不正です".into());
+                    }
                 }
             }
         }

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::types::{ConversionOptions, FileFormat};
+use super::types::{ConversionOptions, FileFormat, IcoFitMode};
 
 pub fn build_args(
     input_path: &Path,
@@ -44,6 +44,20 @@ pub fn build_args(
             .map(with_progress);
     }
 
+    // ICOのマルチサイズ処理
+    if output_format == FileFormat::Ico {
+        if let Some(sizes) = &options.ico_sizes {
+            if !sizes.is_empty() {
+                return Ok(with_progress(build_ico_multi_size_args(
+                    input_path,
+                    output_path,
+                    sizes,
+                    options,
+                )));
+            }
+        }
+    }
+
     // 既存の変換はこれまでと同様 FFmpeg に任せる
     Ok(with_progress(build_default_args(
         input_path,
@@ -58,6 +72,54 @@ fn with_progress(mut args: Vec<String>) -> Vec<String> {
         0..0,
         ["-progress".into(), "pipe:1".into(), "-nostats".into()],
     );
+    args
+}
+
+fn build_ico_multi_size_args(
+    input_path: &Path,
+    output_path: &Path,
+    sizes: &[u32],
+    options: &ConversionOptions,
+) -> Vec<String> {
+    let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
+
+    let fit_mode = options.ico_fit_mode.unwrap_or(IcoFitMode::Pad);
+    let flags = if options.anti_aliasing.unwrap_or(true) {
+        "lanczos"
+    } else {
+        "neighbor"
+    };
+
+    let count = sizes.len();
+    let split_outputs = (0..count)
+        .map(|i| format!("[in{i}]"))
+        .collect::<Vec<_>>()
+        .join("");
+
+    let mut filter_parts = vec![format!("split={count}{split_outputs}")];
+
+    for (i, &s) in sizes.iter().enumerate() {
+        let filter = match fit_mode {
+            IcoFitMode::Pad => {
+                format!(
+                    "[in{i}]scale=w='min({s}\\,iw)':h='min({s}\\,ih)':force_original_aspect_ratio=decrease:flags={flags},pad={s}:{s}:(ow-iw)/2:(oh-ih)/2:color=0x00000000,setsar=1[out{i}]"
+                )
+            }
+            IcoFitMode::Square => {
+                format!("[in{i}]scale={s}:{s}:flags={flags},setsar=1[out{i}]")
+            }
+        };
+        filter_parts.push(filter);
+    }
+
+    let filter_complex = filter_parts.join(";");
+    args.extend(["-filter_complex".into(), filter_complex]);
+
+    for i in 0..count {
+        args.extend(["-map".into(), format!("[out{i}]")]);
+    }
+
+    args.push(path_to_string(output_path));
     args
 }
 

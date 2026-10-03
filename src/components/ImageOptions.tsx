@@ -23,7 +23,13 @@ export type ImageOptionsProps = {
   onBmpBitDepthChange?: (value: number) => void;
   bmpCompression?: boolean;
   onBmpCompressionChange?: (value: boolean) => void;
+  icoSizes?: number[];
+  onIcoSizesChange?: (sizes: number[]) => void;
+  icoFitMode?: "pad" | "square";
+  onIcoFitModeChange?: (mode: "pad" | "square") => void;
 };
+
+const ICO_AVAILABLE_SIZES = [16, 24, 32, 48, 64, 128, 256];
 
 export function ImageOptions({
   format,
@@ -42,8 +48,24 @@ export function ImageOptions({
   onBmpBitDepthChange,
   bmpCompression = false,
   onBmpCompressionChange,
+  icoSizes = [16, 32, 48, 256],
+  onIcoSizesChange,
+  icoFitMode = "pad",
+  onIcoFitModeChange,
 }: ImageOptionsProps) {
   const { t } = useTranslation();
+
+  const toggleIcoSize = (size: number) => {
+    if (!onIcoSizesChange) return;
+    if (icoSizes.includes(size)) {
+      if (icoSizes.length > 1) {
+        onIcoSizesChange(icoSizes.filter((s) => s !== size));
+      }
+    } else {
+      onIcoSizesChange([...icoSizes, size].sort((a, b) => a - b));
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-6">
       {format === "PNG" && (
@@ -172,6 +194,64 @@ export function ImageOptions({
             </label>
           </div>
         </>
+      )}
+      {format === "ICO" && (
+        <div className="flex w-full flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-semibold text-[#415166]">
+              格納サイズ（マルチサイズ対応）
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {ICO_AVAILABLE_SIZES.map((size) => {
+                const checked = icoSizes.includes(size);
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => toggleIcoSize(size)}
+                    className={`rounded-md border px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+                      checked
+                        ? "border-[#586cec] bg-[#eef1ff] text-[#586cec]"
+                        : "border-[#dfe5ef] bg-white text-[#5b687c] hover:bg-[#f4f6ff]"
+                    }`}
+                  >
+                    {size}x{size}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-semibold text-[#415166]">
+              アスペクト比の調整
+            </span>
+            <div className="flex items-center gap-4 text-xs text-[#5b687c]">
+              <label className="flex cursor-pointer items-center gap-1.5">
+                <input
+                  type="radio"
+                  name="icoFitMode"
+                  value="pad"
+                  checked={icoFitMode === "pad"}
+                  onChange={() => onIcoFitModeChange?.("pad")}
+                  className="accent-[#586cec]"
+                />
+                比率を維持（余白を透明パディング）
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5">
+                <input
+                  type="radio"
+                  name="icoFitMode"
+                  value="square"
+                  checked={icoFitMode === "square"}
+                  onChange={() => onIcoFitModeChange?.("square")}
+                  className="accent-[#586cec]"
+                />
+                正方形に伸縮整形
+              </label>
+            </div>
+          </div>
+        </div>
       )}
       {format === "GIF" && (
         <>

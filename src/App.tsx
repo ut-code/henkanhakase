@@ -107,6 +107,8 @@ function App() {
   const [gifMaxColors, setGifMaxColors] = useState<number>(256);
   const [bmpBitDepth, setBmpBitDepth] = useState<number>(24);
   const [bmpCompression, setBmpCompression] = useState<boolean>(false);
+  const [icoSizes, setIcoSizes] = useState<number[]>([16, 32, 48, 256]);
+  const [icoFitMode, setIcoFitMode] = useState<"pad" | "square">("pad");
   const [videoCrf, setVideoCrf] = useState<number>(23);
   const [webmCrf, setWebmCrf] = useState<number>(31);
   const [aviQV, setAviQV] = useState<number>(3);
@@ -189,6 +191,8 @@ function App() {
     gifMaxColors,
     bmpBitDepth,
     bmpCompression,
+    icoSizes,
+    icoFitMode,
     videoCrf,
     webmCrf,
     aviQV,
@@ -409,7 +413,7 @@ function App() {
   ) => {
     let resizeOptions = {};
 
-    if (!isAudioFormat(convertedFormat)) {
+    if (!isAudioFormat(convertedFormat) && convertedFormat !== "ICO") {
       if (resizeMode === "uniform" && mediaDimensions) {
         resizeOptions = {
           width: resizeWidth,
@@ -474,6 +478,12 @@ function App() {
           ...resizeOptions,
           bmpBitDepth,
           bmpCompression,
+        };
+      case "ICO":
+        return {
+          icoSizes,
+          icoFitMode,
+          antiAliasing,
         };
       case "GIF":
         return {
@@ -1375,7 +1385,7 @@ function App() {
           <div className="border-t border-[#edf0f5] px-5.5 py-4">
             {sourceFiles.length > 0 && !isAudioFormat(convertedFormat) ? (
               <div className="flex flex-col gap-5">
-                {sourceFiles.length > 1 && (
+                {sourceFiles.length > 1 && convertedFormat !== "ICO" && (
                   <div className="flex flex-col gap-1.5 rounded-lg bg-[#fafbff] p-3 border border-[#e8ecf4]">
                     <span className="text-xs font-semibold text-[#3c4a60]">
                       複数ファイルのリサイズ処理:
@@ -1407,24 +1417,27 @@ function App() {
                   </div>
                 )}
 
-                {/* 複数ファイル時で「それぞれの縦横比で変換」が選ばれている場合はリサイズオプションを非表示 */}
-                {(sourceFiles.length <= 1 || resizeMode === "uniform") && (
-                  <ResizeOptions
-                    dimensions={mediaDimensions}
-                    aspectRatioLocked={aspectRatioLocked}
-                    antiAliasing={antiAliasing}
-                    width={resizeWidth}
-                    height={resizeHeight}
-                    isLoading={isProbingDimensions}
-                    error={dimensionProbeError}
-                    onAspectRatioLockedChange={handleAspectRatioLockedChange}
-                    onAntiAliasingChange={setAntiAliasing}
-                    onWidthChange={handleResizeWidthChange}
-                    onHeightChange={handleResizeHeightChange}
-                  />
-                )}
+                {/* ICO以外で「単一ファイル」または「最初のファイルの縦横比に固定」が選ばれている場合のみ標準リサイズオプションを表示 */}
+                {convertedFormat !== "ICO" &&
+                  (sourceFiles.length <= 1 || resizeMode === "uniform") && (
+                    <ResizeOptions
+                      dimensions={mediaDimensions}
+                      aspectRatioLocked={aspectRatioLocked}
+                      antiAliasing={antiAliasing}
+                      width={resizeWidth}
+                      height={resizeHeight}
+                      isLoading={isProbingDimensions}
+                      error={dimensionProbeError}
+                      onAspectRatioLockedChange={handleAspectRatioLockedChange}
+                      onAntiAliasingChange={setAntiAliasing}
+                      onWidthChange={handleResizeWidthChange}
+                      onHeightChange={handleResizeHeightChange}
+                    />
+                  )}
 
-                <div className="h-px w-full bg-[#edf0f5]" />
+                {convertedFormat !== "ICO" && (
+                  <div className="h-px w-full bg-[#edf0f5]" />
+                )}
 
                 {IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ? (
                   <ImageOptions
@@ -1444,6 +1457,10 @@ function App() {
                     onBmpBitDepthChange={setBmpBitDepth}
                     bmpCompression={bmpCompression}
                     onBmpCompressionChange={setBmpCompression}
+                    icoSizes={icoSizes}
+                    onIcoSizesChange={setIcoSizes}
+                    icoFitMode={icoFitMode}
+                    onIcoFitModeChange={setIcoFitMode}
                   />
                 ) : (
                   <VideoOptions
