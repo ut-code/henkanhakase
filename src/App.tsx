@@ -76,7 +76,9 @@ function App() {
   const [convertedFormat, setConvertedFormat] = useState<Format>("PNG");
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [isConverting, setIsConverting] = useState(false);
-  const [conversionProgress, setConversionProgress] = useState<number | null>(null);
+  const [conversionProgress, setConversionProgress] = useState<number | null>(
+    null,
+  );
   const activeConversionId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mediaDimensions, setMediaDimensions] =
@@ -103,6 +105,8 @@ function App() {
   const [webpQV, setWebpQV] = useState<number>(75);
   const [gifFPS, setGifFPS] = useState<number>(15);
   const [gifMaxColors, setGifMaxColors] = useState<number>(256);
+  const [bmpBitDepth, setBmpBitDepth] = useState<number>(24);
+  const [bmpCompression, setBmpCompression] = useState<boolean>(false);
   const [videoCrf, setVideoCrf] = useState<number>(23);
   const [webmCrf, setWebmCrf] = useState<number>(31);
   const [aviQV, setAviQV] = useState<number>(3);
@@ -121,9 +125,15 @@ function App() {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    void listen<{ conversionId: string; progress: number | null }>("conversion-progress", (event) => {
-      if (event.payload.conversionId === activeConversionId.current) setConversionProgress(event.payload.progress);
-    }).then((dispose) => { unlisten = dispose; });
+    void listen<{ conversionId: string; progress: number | null }>(
+      "conversion-progress",
+      (event) => {
+        if (event.payload.conversionId === activeConversionId.current)
+          setConversionProgress(event.payload.progress);
+      },
+    ).then((dispose) => {
+      unlisten = dispose;
+    });
     return () => unlisten?.();
   }, []);
 
@@ -177,6 +187,8 @@ function App() {
     webpQV,
     gifFPS,
     gifMaxColors,
+    bmpBitDepth,
+    bmpCompression,
     videoCrf,
     webmCrf,
     aviQV,
@@ -456,6 +468,12 @@ function App() {
         return {
           ...resizeOptions,
           qVWebp: webpQV,
+        };
+      case "BMP":
+        return {
+          ...resizeOptions,
+          bmpBitDepth,
+          bmpCompression,
         };
       case "GIF":
         return {
@@ -1399,6 +1417,10 @@ function App() {
                     onGifFPSChange={setGifFPS}
                     gifMaxColors={gifMaxColors}
                     onGifMaxColorsChange={setGifMaxColors}
+                    bmpBitDepth={bmpBitDepth}
+                    onBmpBitDepthChange={setBmpBitDepth}
+                    bmpCompression={bmpCompression}
+                    onBmpCompressionChange={setBmpCompression}
                   />
                 ) : (
                   <VideoOptions

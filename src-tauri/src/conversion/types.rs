@@ -254,6 +254,8 @@ pub struct ConversionOptions {
     pub crf: Option<u32>,
     pub crf_vp9: Option<u32>,
     pub q_v_avi: Option<u32>,
+    pub bmp_bit_depth: Option<u32>,
+    pub bmp_compression: Option<bool>,
 
     /// 音声変換用オプション
     pub audio: Option<AudioOptions>,
@@ -318,6 +320,14 @@ impl ConversionOptions {
         if let Some(q_v_avi) = self.q_v_avi {
             if !(1..=31).contains(&q_v_avi) {
                 return Err("q:v は 1〜31 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(bmp_bit_depth) = self.bmp_bit_depth {
+            if !matches!(bmp_bit_depth, 1 | 8 | 16 | 24 | 32) {
+                return Err(
+                    "bmp_bit_depth は 8 / 16 / 24 / 32 のいずれかを指定してください".into(),
+                );
             }
         }
 

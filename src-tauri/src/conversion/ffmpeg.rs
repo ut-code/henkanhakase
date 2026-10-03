@@ -97,6 +97,26 @@ fn build_default_args(
         args.extend(["-q:v".into(), q_v_webp.to_string()]);
     }
 
+    if output_format == FileFormat::Bmp {
+        if let Some(bit_depth) = options.bmp_bit_depth {
+            let pix_fmt = match bit_depth {
+                1 => "monow",
+                8 => "pal8",
+                16 => "rgb555le",
+                24 => "bgr24",
+                32 => "bgra",
+                _ => "bgr24",
+            };
+            args.extend(["-pix_fmt".into(), pix_fmt.into()]);
+        }
+
+        if let Some(compression) = options.bmp_compression {
+            if compression {
+                args.extend(["-compression_algo".into(), "rle".into()]);
+            }
+        }
+    }
+
     if output_format.is_video() {
         append_video_output_options(&mut args, output_format);
 

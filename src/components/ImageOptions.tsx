@@ -19,6 +19,10 @@ export type ImageOptionsProps = {
   onGifFPSChange: (value: number) => void;
   gifMaxColors: number;
   onGifMaxColorsChange: (value: number) => void;
+  bmpBitDepth?: number;
+  onBmpBitDepthChange?: (value: number) => void;
+  bmpCompression?: boolean;
+  onBmpCompressionChange?: (value: boolean) => void;
 };
 
 export function ImageOptions({
@@ -34,6 +38,10 @@ export function ImageOptions({
   onGifFPSChange,
   gifMaxColors,
   onGifMaxColorsChange,
+  bmpBitDepth = 24,
+  onBmpBitDepthChange,
+  bmpCompression = false,
+  onBmpCompressionChange,
 }: ImageOptionsProps) {
   const { t } = useTranslation();
   return (
@@ -127,6 +135,43 @@ export function ImageOptions({
             <span>{t("rangeHighQuality", { value: 100 })}</span>
           </div>
         </div>
+      )}
+      {format === "BMP" && (
+        <>
+          <div className="flex min-w-45 flex-1 max-w-xs flex-col gap-1.5">
+            <label
+              htmlFor="bmp-bit-depth"
+              className="text-xs font-semibold text-[#415166]"
+            >
+              ビット深度
+            </label>
+            <select
+              id="bmp-bit-depth"
+              value={bmpBitDepth}
+              onChange={(e) =>
+                onBmpBitDepthChange?.(Number.parseInt(e.target.value, 10))
+              }
+              className="rounded-lg border border-[#dfe5ef] bg-white px-2.5 py-1.5 text-xs text-[#3c4a60] outline-none focus:border-[#586cec]"
+            >
+              <option value={1}>1 bit (モノクロ)</option>
+              <option value={8}>8 bit (256色)</option>
+              <option value={16}>16 bit (High Color)</option>
+              <option value={24}>24 bit (True Color)</option>
+              <option value={32}>32 bit (True Color + Alpha)</option>
+            </select>
+          </div>
+          <div className="flex min-w-45 flex-1 max-w-xs flex-col gap-1.5 justify-center">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-[#415166] mt-4">
+              <input
+                type="checkbox"
+                checked={bmpCompression}
+                onChange={(e) => onBmpCompressionChange?.(e.target.checked)}
+                className="size-4 rounded border-[#dfe5ef] accent-[#586cec]"
+              />
+              RLE 圧縮を有効化
+            </label>
+          </div>
+        </>
       )}
       {format === "GIF" && (
         <>
