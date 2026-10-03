@@ -263,6 +263,19 @@ pub struct ConversionOptions {
 
 impl ConversionOptions {
     pub fn validate(&self, output_format: FileFormat) -> Result<(), String> {
+        if output_format == FileFormat::Ico {
+            if let Some(width) = self.width {
+                if width > 256 {
+                    return Err("ICO形式の幅は最大256ピクセルまでです".into());
+                }
+            }
+            if let Some(height) = self.height {
+                if height > 256 {
+                    return Err("ICO形式の高さは最大256ピクセルまでです".into());
+                }
+            }
+        }
+
         if let Some(width) = self.width {
             if !(1..=16384).contains(&width) {
                 return Err("幅は 1〜16384 の範囲で指定してください".into());

@@ -693,9 +693,28 @@ function App() {
   const handleFormatChange = (newFormat: Format) => {
     setConvertedFormat(newFormat);
 
-    if (mediaDimensions && VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
-      setResizeWidth(normalizeVideoDimension(resizeWidth));
-      setResizeHeight(normalizeVideoDimension(resizeHeight));
+    if (mediaDimensions) {
+      if (VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
+        setResizeWidth(normalizeVideoDimension(resizeWidth));
+        setResizeHeight(normalizeVideoDimension(resizeHeight));
+      } else if (newFormat === "ICO") {
+        // ICO形式選択時、256x256以内にアスペクト比を維持してクランプ
+        const ratio = mediaDimensions.width / mediaDimensions.height;
+        let w = resizeWidth;
+        let h = resizeHeight;
+
+        if (w > 256 || h > 256) {
+          if (ratio >= 1) {
+            w = 256;
+            h = Math.max(1, Math.round(256 / ratio));
+          } else {
+            h = 256;
+            w = Math.max(1, Math.round(256 * ratio));
+          }
+        }
+        setResizeWidth(w);
+        setResizeHeight(h);
+      }
     }
   };
 
@@ -717,19 +736,23 @@ function App() {
     if (!mediaDimensions) return;
 
     const ratio = mediaDimensions.width / mediaDimensions.height;
+    const maxAllowed = convertedFormat === "ICO" ? 256 : MAX_DIMENSION;
+
     let width = axis === "width" ? clampDimension(value) : resizeWidth;
     let height = axis === "height" ? clampDimension(value) : resizeHeight;
 
     if (axis === "width") {
+      width = Math.min(width, maxAllowed);
       height = Math.round(width / ratio);
-      if (height > MAX_DIMENSION) {
-        height = MAX_DIMENSION;
+      if (height > maxAllowed) {
+        height = maxAllowed;
         width = Math.round(height * ratio);
       }
     } else {
+      height = Math.min(height, maxAllowed);
       width = Math.round(height * ratio);
-      if (width > MAX_DIMENSION) {
-        width = MAX_DIMENSION;
+      if (width > maxAllowed) {
+        width = maxAllowed;
         height = Math.round(width / ratio);
       }
     }

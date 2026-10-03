@@ -69,12 +69,26 @@ fn build_default_args(
 ) -> Vec<String> {
     let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
 
-    if let Some(scale) = build_scale_filter(
+    let mut scale_filter = build_scale_filter(
         options.width,
         options.height,
         output_format.is_video(),
         options.anti_aliasing.unwrap_or(true),
-    ) {
+    );
+
+    // ICO形式でリサイズ明示がない場合、アスペクト比を維持して256px以内に収める自動フィルターを設定
+    if output_format == FileFormat::Ico && scale_filter.is_none() {
+        let flags = if options.anti_aliasing.unwrap_or(true) {
+            "lanczos"
+        } else {
+            "neighbor"
+        };
+        scale_filter = Some(format!(
+            "scale=min(256\\,iw):min(256\\,ih):force_original_aspect_ratio=decrease:flags={flags},setsar=1"
+        ));
+    }
+
+    if let Some(scale) = scale_filter {
         args.extend(["-vf".into(), scale]);
     }
 
