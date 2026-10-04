@@ -11,6 +11,9 @@ pub enum FileFormat {
     #[serde(rename = "webp")]
     Webp,
 
+    #[serde(rename = "avif")]
+    Avif,
+
     #[serde(rename = "gif")]
     Gif,
 
@@ -66,6 +69,7 @@ impl FileFormat {
             Self::Png => "png",
             Self::Jpeg => "jpg",
             Self::Webp => "webp",
+            Self::Avif => "avif",
             Self::Gif => "gif",
             Self::Bmp => "bmp",
             Self::Ico => "ico",

@@ -5,6 +5,7 @@ export const IMAGE_FORMATS = [
   "GIF",
   "BMP",
   "ICO",
+  "AVIF",
 ] as const;
 export const VIDEO_FORMATS = ["MP4", "WebM", "AVI", "MOV"] as const;
 export const AUDIO_FORMATS = [
@@ -58,6 +59,7 @@ export const mimeTypes: Record<Format, string[]> = {
   GIF: ["image/gif"],
   BMP: ["image/bmp", "image/x-bmp"],
   ICO: ["image/x-icon", "image/vnd.microsoft.icon"],
+  AVIF: ["image/avif"],
   MP4: ["video/mp4"],
   WebM: ["video/webm"],
   AVI: ["video/x-msvideo", "video/avi", "video/msvideo", "video/vnd.avi"],

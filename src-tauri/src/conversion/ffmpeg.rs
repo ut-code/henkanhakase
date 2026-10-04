@@ -156,7 +156,12 @@ fn build_default_args(
 
     if matches!(
         output_format,
-        FileFormat::Png | FileFormat::Jpeg | FileFormat::Webp | FileFormat::Bmp | FileFormat::Ico
+        FileFormat::Png
+            | FileFormat::Jpeg
+            | FileFormat::Webp
+            | FileFormat::Avif
+            | FileFormat::Bmp
+            | FileFormat::Ico
     ) {
         args.extend(["-frames:v".into(), "1".into()]);
     }
