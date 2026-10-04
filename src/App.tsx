@@ -146,9 +146,13 @@ function App() {
     let hasImage = false;
     let hasVideo = false;
     let hasAudio = false;
+    let hasHeic = false;
 
     for (const file of sourceFiles) {
-      if (
+      if (file.format === "HEIC") {
+        hasHeic = true;
+        hasImage = true;
+      } else if (
         file.format === "GIF" ||
         VIDEO_FORMATS.includes(file.format as VideoFormat)
       ) {
@@ -160,7 +164,7 @@ function App() {
       }
     }
 
-    return { hasImage, hasVideo, hasAudio };
+    return { hasImage, hasVideo, hasAudio, hasHeic };
   }, [sourceFiles]);
 
   const isMixedMediaType = useMemo(() => {
@@ -209,6 +213,9 @@ function App() {
   // 選択されているすべてのファイルに対応する出力フォーマット候補を出す
   const availableOutputFormats = useMemo<Format[]>(() => {
     if (sourceFiles.length === 0 || isMixedMediaType) return [];
+
+    // HEICが含まれる場合は PNG, JPEG, WebP のみに限定
+    if (mediaTypes.hasHeic) return ["PNG", "JPEG", "WebP"];
 
     if (mediaTypes.hasVideo) return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
     if (mediaTypes.hasAudio) return [...AUDIO_FORMATS];
@@ -326,7 +333,9 @@ function App() {
         const firstFile = nextFiles[0];
         if (firstFile?.format) {
           if (!append || prevFiles.length === 0) {
-            if (firstFile.format === "GIF") {
+            if (firstFile.format === "HEIC") {
+              setConvertedFormat("PNG");
+            } else if (firstFile.format === "GIF") {
               setConvertedFormat("MP4");
             } else if (
               VIDEO_FORMATS.includes(firstFile.format as VideoFormat)

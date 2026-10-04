@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum FileFormat {
+    #[serde(rename = "heic", alias = "heif")]
+    Heic,
+
     #[serde(rename = "png")]
     Png,
 
@@ -66,6 +69,7 @@ pub enum FileFormat {
 impl FileFormat {
     pub fn extension(self) -> &'static str {
         match self {
+            Self::Heic => "heic",
             Self::Png => "png",
             Self::Jpeg => "jpg",
             Self::Webp => "webp",
