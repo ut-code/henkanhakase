@@ -174,7 +174,7 @@ export function ImageOptions({
                 htmlFor="avif-quality"
                 className="font-semibold text-[#415166]"
               >
-                画質 (CRF: 低いほど高画質)
+                {t("avifQuality")}
               </label>
               <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
                 {avifQuality}
@@ -192,8 +192,8 @@ export function ImageOptions({
               className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
             />
             <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-              <span>最高画質 (0)</span>
-              <span>低画質 (63)</span>
+              <span>{t("rangeHighQuality", { value: 0 })}</span>
+              <span>{t("rangeLowQuality", { value: 63 })}</span>
             </div>
           </div>
           <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
@@ -202,7 +202,7 @@ export function ImageOptions({
                 htmlFor="avif-speed"
                 className="font-semibold text-[#415166]"
               >
-                変換速度 (cpu-used: 高いほど高速・圧縮効率低下)
+                {t("avifSpeed")}
               </label>
               <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
                 {avifSpeed}
@@ -220,8 +220,8 @@ export function ImageOptions({
               className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
             />
             <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-              <span>遅い/高圧縮率 (0)</span>
-              <span>高速/低圧縮率 (8)</span>
+              <span>0 ({t("highCompression")})</span>
+              <span>8 ({t("lowCompression")})</span>
             </div>
           </div>
         </>
@@ -233,7 +233,7 @@ export function ImageOptions({
               htmlFor="bmp-bit-depth"
               className="text-xs font-semibold text-[#415166]"
             >
-              ビット深度
+              {t("bitDepth")}
             </label>
             <select
               id="bmp-bit-depth"
@@ -243,11 +243,13 @@ export function ImageOptions({
               }
               className="rounded-lg border border-[#dfe5ef] bg-white px-2.5 py-1.5 text-xs text-[#3c4a60] outline-none focus:border-[#586cec]"
             >
-              <option value={1}>1 bit (モノクロ)</option>
-              <option value={8}>8 bit (256色)</option>
-              <option value={16}>16 bit (High Color)</option>
-              <option value={24}>24 bit (True Color)</option>
-              <option value={32}>32 bit (True Color + Alpha)</option>
+              <option value={1}>1 bit</option>
+              <option value={8}>
+                8 bit ({t("colorCount", { value: 256 })})
+              </option>
+              <option value={16}>16 bit</option>
+              <option value={24}>24 bit</option>
+              <option value={32}>32 bit (Alpha)</option>
             </select>
           </div>
           <div className="flex min-w-45 flex-1 max-w-xs flex-col gap-1.5 justify-center">
@@ -258,7 +260,7 @@ export function ImageOptions({
                 onChange={(e) => onBmpCompressionChange?.(e.target.checked)}
                 className="size-4 rounded border-[#dfe5ef] accent-[#586cec]"
               />
-              RLE 圧縮を有効化
+              {t("enableRleCompression")}
             </label>
           </div>
         </>
@@ -267,7 +269,7 @@ export function ImageOptions({
         <div className="flex w-full flex-col gap-4">
           <div className="flex flex-col gap-2">
             <span className="text-xs font-semibold text-[#415166]">
-              格納サイズ（マルチサイズ対応）
+              {t("outputSize")}
             </span>
             <div className="flex flex-wrap gap-2">
               {ICO_AVAILABLE_SIZES.map((size) => {
@@ -292,7 +294,7 @@ export function ImageOptions({
 
           <div className="flex flex-col gap-2">
             <span className="text-xs font-semibold text-[#415166]">
-              アスペクト比の調整
+              {t("details")}
             </span>
             <div className="flex items-center gap-4 text-xs text-[#5b687c]">
               <label className="flex cursor-pointer items-center gap-1.5">
@@ -304,7 +306,7 @@ export function ImageOptions({
                   onChange={() => onIcoFitModeChange?.("pad")}
                   className="accent-[#586cec]"
                 />
-                比率を維持（余白を透明パディング）
+                {t("keepRatioPadding")}
               </label>
               <label className="flex cursor-pointer items-center gap-1.5">
                 <input
@@ -315,7 +317,7 @@ export function ImageOptions({
                   onChange={() => onIcoFitModeChange?.("square")}
                   className="accent-[#586cec]"
                 />
-                正方形に伸縮整形
+                {t("stretchToSquare")}
               </label>
             </div>
           </div>
@@ -331,7 +333,7 @@ export function ImageOptions({
                   htmlFor="gif-fps"
                   className="font-semibold text-[#415166]"
                 >
-                  FPS
+                  {t("fps")}
                 </label>
                 <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
                   {gifFPS} fps
