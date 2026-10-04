@@ -103,6 +103,8 @@ function App() {
   const [pngCompressionLevel, setPngCompressionLevel] = useState<number>(9);
   const [jpegQV, setJpegQV] = useState<number>(3);
   const [webpQV, setWebpQV] = useState<number>(75);
+  const [avifQuality, setAvifQuality] = useState<number>(23);
+  const [avifSpeed, setAvifSpeed] = useState<number>(6);
   const [gifFPS, setGifFPS] = useState<number>(15);
   const [gifMaxColors, setGifMaxColors] = useState<number>(256);
   const [bmpBitDepth, setBmpBitDepth] = useState<number>(24);
@@ -187,6 +189,8 @@ function App() {
     pngCompressionLevel,
     jpegQV,
     webpQV,
+    avifQuality,
+    avifSpeed,
     gifFPS,
     gifMaxColors,
     bmpBitDepth,
@@ -472,6 +476,12 @@ function App() {
         return {
           ...resizeOptions,
           qVWebp: webpQV,
+        };
+      case "AVIF":
+        return {
+          ...resizeOptions,
+          avifQuality,
+          avifSpeed,
         };
       case "BMP":
         return {
@@ -1449,6 +1459,10 @@ function App() {
                     onJpegQVChange={setJpegQV}
                     webpQV={webpQV}
                     onWebpQVChange={setWebpQV}
+                    avifQuality={avifQuality}
+                    onAvifQualityChange={setAvifQuality}
+                    avifSpeed={avifSpeed}
+                    onAvifSpeedChange={setAvifSpeed}
                     gifFPS={gifFPS}
                     onGifFPSChange={setGifFPS}
                     gifMaxColors={gifMaxColors}

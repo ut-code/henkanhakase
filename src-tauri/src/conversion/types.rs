@@ -260,6 +260,8 @@ pub struct ConversionOptions {
     pub q_v_jpeg: Option<u32>,
     #[serde(rename = "qVWebp")]
     pub q_v_webp: Option<u32>,
+    pub avif_quality: Option<u32>,
+    pub avif_speed: Option<u32>,
     pub fps: Option<u32>,
     pub max_colors: Option<u32>,
     pub crf: Option<u32>,
@@ -325,6 +327,18 @@ impl ConversionOptions {
         if let Some(q_v_webp) = self.q_v_webp {
             if !(1..=100).contains(&q_v_webp) {
                 return Err("q:v は 1〜100 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(avif_quality) = self.avif_quality {
+            if !(0..=63).contains(&avif_quality) {
+                return Err("avif_quality は 0〜63 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(avif_speed) = self.avif_speed {
+            if !(0..=10).contains(&avif_speed) {
+                return Err("avif_speed は 0〜10 の範囲で指定してください".into());
             }
         }
 

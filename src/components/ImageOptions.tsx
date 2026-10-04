@@ -15,6 +15,10 @@ export type ImageOptionsProps = {
   onJpegQVChange: (value: number) => void;
   webpQV: number;
   onWebpQVChange: (value: number) => void;
+  avifQuality?: number;
+  onAvifQualityChange?: (value: number) => void;
+  avifSpeed?: number;
+  onAvifSpeedChange?: (value: number) => void;
   gifFPS: number;
   onGifFPSChange: (value: number) => void;
   gifMaxColors: number;
@@ -40,6 +44,10 @@ export function ImageOptions({
   onJpegQVChange,
   webpQV,
   onWebpQVChange,
+  avifQuality = 23,
+  onAvifQualityChange,
+  avifSpeed = 6,
+  onAvifSpeedChange,
   gifFPS,
   onGifFPSChange,
   gifMaxColors,
@@ -157,6 +165,66 @@ export function ImageOptions({
             <span>{t("rangeHighQuality", { value: 100 })}</span>
           </div>
         </div>
+      )}
+      {format === "AVIF" && (
+        <>
+          <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <label
+                htmlFor="avif-quality"
+                className="font-semibold text-[#415166]"
+              >
+                画質 (CRF: 低いほど高画質)
+              </label>
+              <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                {avifQuality}
+              </span>
+            </div>
+            <input
+              type="range"
+              id="avif-quality"
+              min="0"
+              max="63"
+              value={avifQuality}
+              onChange={(e) =>
+                onAvifQualityChange?.(Number.parseInt(e.target.value, 10))
+              }
+              className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+            />
+            <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+              <span>最高画質 (0)</span>
+              <span>低画質 (63)</span>
+            </div>
+          </div>
+          <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <label
+                htmlFor="avif-speed"
+                className="font-semibold text-[#415166]"
+              >
+                変換速度 (cpu-used: 高いほど高速・圧縮効率低下)
+              </label>
+              <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+                {avifSpeed}
+              </span>
+            </div>
+            <input
+              type="range"
+              id="avif-speed"
+              min="0"
+              max="8"
+              value={avifSpeed}
+              onChange={(e) =>
+                onAvifSpeedChange?.(Number.parseInt(e.target.value, 10))
+              }
+              className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
+            />
+            <div className="flex justify-between text-[10px] text-[#9aa6b7]">
+              <span>遅い/高圧縮率 (0)</span>
+              <span>高速/低圧縮率 (8)</span>
+            </div>
+          </div>
+        </>
       )}
       {format === "BMP" && (
         <>

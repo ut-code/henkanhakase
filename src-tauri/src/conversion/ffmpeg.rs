@@ -178,6 +178,21 @@ fn build_default_args(
         args.extend(["-q:v".into(), q_v_webp.to_string()]);
     }
 
+    if output_format == FileFormat::Avif {
+        args.extend(["-c:v".into(), "libaom-av1".into()]);
+        if let Some(avif_quality) = options.avif_quality {
+            args.extend([
+                "-crf".into(),
+                avif_quality.to_string(),
+                "-b:v".into(),
+                "0".into(),
+            ]);
+        }
+        if let Some(avif_speed) = options.avif_speed {
+            args.extend(["-cpu-used".into(), avif_speed.to_string()]);
+        }
+    }
+
     if output_format == FileFormat::Bmp {
         if let Some(bit_depth) = options.bmp_bit_depth {
             let pix_fmt = match bit_depth {
