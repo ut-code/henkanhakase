@@ -21,6 +21,7 @@
 | `src/App.css`               | スタイルシート                                                |
 | `src/App.tsx`               | フロントエンドの本体                                          |
 | `src-tauri/binaries`        | FFmpegのバイナリファイル。sidecarで使用されている             |
+| `src-tauri/binaries-lgpl`   | Mac App Store 向けの LGPL 版 FFmpeg のバイナリファイル         |
 | `src-tauri/icons`           | アプリケーションアイコン                                      |
 | `src-tauri/src/conversion/ffmpeg.rs` | FFmpegのコマンドの組み立て                                        |
 | `src-tauri/src/conversion/mod.rs`    | 変換処理のモジュール                                          |
@@ -152,16 +153,18 @@
 
 ただし、アプリケーションに同梱している [FFmpeg](https://ffmpeg.org/) のバイナリ(`src-tauri/binaries`)は本体とは別のプログラムで、それぞれのビルドのライセンスに従います。
 
-| 配布先                                    | 同梱する FFmpeg | ビルド方法                 |
-| ----------------------------------------- | --------------- | -------------------------- |
-| GitHub(Windows / Linux / macOS)、Microsoft Store | GPLv3 版        | `npm run tauri build`      |
-| Mac App Store                             | LGPL 版         | `npm run tauri:build:lgpl` |
+| 配布先                                    | 同梱する FFmpeg                       | ビルド方法                 |
+| ----------------------------------------- | ------------------------------------- | -------------------------- |
+| GitHub(Windows / Linux / macOS)、Microsoft Store | GPLv3 版(`src-tauri/binaries`)      | `npm run tauri build`      |
+| Mac App Store                             | LGPL 版(`src-tauri/binaries-lgpl`) | `npm run tauri:build:lgpl` |
 
 FFmpeg を同梱して配布する場合は、配布したバイナリに対応する FFmpeg のソースコードを GitHub のリリースに添付してください。ライセンスの本文と説明は `src-tauri/licenses/FFmpeg-*.txt` にあり、インストーラーに同梱されます。
 
 ### macOS 向け LGPL 版のビルド
 
-H.264 エンコーダの libx264 は GPL のため、LGPL 版では macOS 標準の VideoToolbox(`h264_videotoolbox`)を使います。`npm run tauri:build:lgpl` は Cargo の `lgpl-ffmpeg` feature を有効にしてビルドし、エンコーダを切り替えます(macOS でのみビルドできます)。
+H.264 エンコーダの libx264 は GPL のため、LGPL 版では macOS 標準の VideoToolbox(`h264_videotoolbox`)を使います。`npm run tauri:build:lgpl` は Cargo の `lgpl-ffmpeg` feature を有効にしてエンコーダを切り替え、`src-tauri/tauri.lgpl.conf.json` で同梱する FFmpeg を `src-tauri/binaries-lgpl` のものに差し替えます(macOS でのみビルドできます)。GPL 版と LGPL 版は別のディレクトリに置くので、入れ替える必要はありません。
+
+ビルド時に `src-tauri/build.rs` が、同梱する FFmpeg が LGPL 版であること(`ffmpeg -L` と `-buildconf`)と、feature と設定の組み合わせが正しいことを検証し、問題があればビルドを止めます。
 
 - 画質(CRF)は VideoToolbox の `-q:v` に変換して指定します。Intel Mac では `-q:v` が使えないため、エンコーダの既定のビットレートになります
 - `-allow_sw 1` を付けているため、ハードウェアエンコーダが使えない環境ではソフトウェアエンコードになります
@@ -172,7 +175,7 @@ H.264 エンコーダの libx264 は GPL のため、LGPL 版では macOS 標準
   scripts/build-ffmpeg-lgpl-macos.sh
   ```
 
-  - `~/ffmpeg-lgpl/out` に、`src-tauri/binaries` に置くバイナリと、リリースに添付する対応ソースコード一式(`ffmpeg-lgpl-<version>-macos-src.tar.gz`)が出力されます
+  - バイナリは `src-tauri/binaries-lgpl` に、リリースに添付する対応ソースコード一式(`ffmpeg-lgpl-<version>-macos-src.tar.gz`)は `~/ffmpeg-lgpl/out` に出力されます
   - ビルド後に、ライセンスが LGPL であること、必要なエンコーダがそろっていること、Homebrew などのライブラリに動的リンクしていないことを自動で検証します
   - バージョンや設定はスクリプト冒頭のコメントを参照してください
 

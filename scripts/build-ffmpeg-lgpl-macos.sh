@@ -5,9 +5,11 @@
 #   brew install pkg-config nasm
 #   scripts/build-ffmpeg-lgpl-macos.sh
 #
-# 成果物は $WORK_DIR/out に出力される:
-#   ffmpeg-<arch>-apple-darwin          … src-tauri/binaries に置くバイナリ
-#   ffmpeg-lgpl-<version>-macos-src.tar.gz … 配布時にリリースへ添付する、対応するソースコード一式
+# 成果物:
+#   src-tauri/binaries-lgpl/ffmpeg-<arch>-apple-darwin
+#     … LGPL 版のバイナリ。`npm run tauri:build:lgpl` で同梱される(GPL 版の src-tauri/binaries はそのまま)
+#   $WORK_DIR/out/ffmpeg-lgpl-<version>-macos-src.tar.gz
+#     … 配布時にリリースへ添付する、対応するソースコード一式
 #
 # 環境変数で変更できるもの:
 #   WORK_DIR                  作業ディレクトリ(既定: ~/ffmpeg-lgpl)
@@ -29,6 +31,7 @@ WORK_DIR="${WORK_DIR:-$HOME/ffmpeg-lgpl}"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
 
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+LGPL_BIN_DIR="$(dirname "$(dirname "$SCRIPT_PATH")")/src-tauri/binaries-lgpl"
 DOWNLOAD_DIR="$WORK_DIR/downloads"
 SRC_DIR="$WORK_DIR/src"
 PREFIX="$WORK_DIR/prefix"
@@ -236,7 +239,8 @@ echo "OK: LGPL / 必要なエンコーダあり / 外部の動的ライブラリ
 
 log "成果物を出力"
 
-OUT_BIN="$OUT_DIR/ffmpeg-$ARCH-apple-darwin"
+mkdir -p "$LGPL_BIN_DIR"
+OUT_BIN="$LGPL_BIN_DIR/ffmpeg-$ARCH-apple-darwin"
 cp "$FFMPEG_BIN" "$OUT_BIN"
 
 # 対応するソースコード一式(各ライブラリのソースとこのスクリプト)
@@ -262,8 +266,7 @@ cat <<EOF
   バイナリ:         $OUT_BIN
   ソースコード一式: $SRC_ARCHIVE
 
-アプリに組み込むには(GPL 版のバイナリは退避してください):
-  cp "$OUT_BIN" src-tauri/binaries/
+Mac App Store 向けのビルド(GPL 版の src-tauri/binaries はそのままで構いません):
   npm run tauri:build:lgpl
 
 配布するときは、ソースコード一式をリリースに添付してください。
