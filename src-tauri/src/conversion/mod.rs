@@ -1,5 +1,6 @@
 mod error;
 mod ffmpeg;
+mod heic;
 mod progress;
 mod types;
 
@@ -57,12 +58,63 @@ pub async fn convert(
         .map_err(|_| ConversionError::new(ErrorCode::TimestampFetchFailed))?
         .as_nanos();
 
-    let output_file = TempFile::new(temp_dir.join(format!(
+    // 出力パスを一度普通の PathBuf として保持
+    let target_path = temp_dir.join(format!(
         "{}_{}.{}",
         request.stem,
         timestamp,
         request.output_format.extension()
-    )));
+    ));
+
+    // キャンセル時や失敗時に削除されるよう TempFile ガードを作成
+    let output_file = TempFile::new(target_path);
+
+    let emit_progress = |progress, state| {
+        let _ = app.emit(
+            "conversion-progress",
+            ConversionProgress {
+                conversion_id: request.conversion_id.clone(),
+                progress,
+                state,
+            },
+        );
+    };
+
+    // HEIC入力処理の判定（FFmpegではなく heif-oxide -> image で処理）
+    if request.input_format == FileFormat::Heic {
+        if !matches!(
+            request.output_format,
+            FileFormat::Png | FileFormat::Jpeg | FileFormat::Webp
+        ) {
+            return Err(ConversionError::new(ErrorCode::InvalidOptions));
+        }
+
+        emit_progress(Some(10), "running");
+
+        if cancel_flag.load(Ordering::Relaxed) {
+            return Err(ConversionError::new(ErrorCode::ConversionCancelled));
+        }
+
+        // HEICの変換を実行
+        heic::convert_heic(
+            &input_path,
+            output_file.path(),
+            request.output_format,
+            &request.options,
+        )?;
+
+        if cancel_flag.load(Ordering::Relaxed) {
+            return Err(ConversionError::new(ErrorCode::ConversionCancelled));
+        }
+
+        if !output_file.path().exists() {
+            return Err(ConversionError::new(ErrorCode::OutputFileNotGenerated));
+        }
+
+        let final_path = output_file.disarm();
+        emit_progress(Some(100), "completed");
+        return Ok(final_path.to_string_lossy().into_owned());
+    }
 
     let duration_ms = request
         .duration_ms
@@ -77,16 +129,8 @@ pub async fn convert(
     )
     .map_err(|_| ConversionError::new(ErrorCode::InvalidOptions))?;
 
-    let emit_progress = |progress, state| {
-        let _ = app.emit(
-            "conversion-progress",
-            ConversionProgress {
-                conversion_id: request.conversion_id.clone(),
-                progress,
-                state,
-            },
-        );
-    };
+    println!("FFmpeg command: ffmpeg {}", args.join(" "));
+
     emit_progress(None, "running");
 
     let (mut rx, child) = app
@@ -105,7 +149,9 @@ pub async fn convert(
 
         if let Ok(Some(event)) = tokio::time::timeout(Duration::from_millis(100), rx.recv()).await {
             match event {
-                tauri_plugin_shell::process::CommandEvent::Stdout(bytes) => {
+                tauri_plugin_shell::process::CommandEvent::Stdout(bytes)
+                | tauri_plugin_shell::process::CommandEvent::Stderr(bytes) => {
+                    // Stderrも受信
                     if let Ok(output) = std::str::from_utf8(&bytes) {
                         for line in output.lines() {
                             if let Some(progress) = percentage(line.trim(), duration_ms) {
@@ -129,6 +175,7 @@ pub async fn convert(
         return Err(ConversionError::new(ErrorCode::OutputFileNotGenerated));
     }
 
+    // 正常終了した場合のみ disarm してパスを確定・保持する
     let final_path = output_file.disarm();
     emit_progress(Some(100), "completed");
     Ok(final_path.to_string_lossy().into_owned())
@@ -166,6 +213,11 @@ pub async fn probe_dimensions(
     let input_path = PathBuf::from(&request.input_path);
     if !input_path.exists() {
         return Err(ConversionError::new(ErrorCode::InputFileNotFound));
+    }
+
+    // HEIC形式の場合は dedicated モジュールで解析
+    if request.input_format == FileFormat::Heic {
+        return heic::probe_heic_dimensions(&input_path);
     }
 
     let temp_dir = std::env::temp_dir().join("henkanhakase");
@@ -216,6 +268,11 @@ pub async fn generate_thumbnail(
     let input_path = PathBuf::from(&request.input_path);
     if !input_path.exists() {
         return Err(ConversionError::new(ErrorCode::InputFileNotFound));
+    }
+
+    // HEIC形式の場合は専用のサムネイル生成ロジックを呼び出す
+    if request.input_format == FileFormat::Heic {
+        return heic::generate_heic_thumbnail(&input_path);
     }
 
     let temp_dir = std::env::temp_dir().join("henkanhakase");

@@ -39,6 +39,18 @@ export function FormatDropdown({
       ja: "標準機能のみで簡易アニメーションを表示でき互換性が高い。最大256色に制限されグラデーションの再現性に劣る。短いループ画像や簡易アニメーションの共有に適している。",
       en: "Broadly compatible and displays simple animations natively without plugins. Limited to a maximum of 256 colors, making gradients appear degraded. Best suited for short looping animations and simple graphics.",
     },
+    BMP: {
+      ja: "主に非圧縮で画像データを保存するシンプルな画像フォーマット。画質の劣化が起こりにくい一方、ファイルサイズが非常に大きくなりやすい。Windows環境での画像処理や、単純なビットマップデータの保存に適している。",
+      en: "A simple image format that primarily stores image data without compression. It avoids lossy quality degradation but tends to produce very large files. Well suited for Windows-based image processing and simple bitmap data storage.",
+    },
+    ICO: {
+      ja: "複数のサイズや色深度のアイコン画像を1つのファイルに格納できるアイコン用フォーマット。Webサイトのファビコン（favicon）やWindowsアプリケーションのアイコンなどに利用される。",
+      en: "An icon format that can store multiple images with different sizes and color depths in a single file. Commonly used for website favicons and Windows application icons.",
+    },
+    AVIF: {
+      ja: "JPEGやPNGより高い圧縮効率を持ち、画質を保ちながらファイルサイズを大幅に削減しやすい。透過やHDR、アニメーションにも対応。古いブラウザやレガシーソフトウェアでは非対応の場合がある。JPEGやPNGをWeb向けに軽量化したい場合に適している。",
+      en: "Offers higher compression efficiency than JPEG and PNG, making it possible to significantly reduce file sizes while maintaining image quality. Supports transparency, HDR, and animation. May not be supported by older browsers or legacy software. Best suited for reducing JPEG and PNG file sizes for web use.",
+    },
     MP4: {
       ja: "ほぼ全ての端末やブラウザで再生可能な互換性と高い圧縮効率を兼ね備える。コンテナ内のコーデック仕様に依存する。Web配信やSNS投稿、汎用的な動画共有に適している。",
       en: "Combines broad compatibility across almost all devices and browsers with high compression efficiency. Playback depends on internal codec support. Best suited for web streaming, social media, and general video sharing.",

@@ -104,8 +104,14 @@ function App() {
   const [pngCompressionLevel, setPngCompressionLevel] = useState<number>(9);
   const [jpegQV, setJpegQV] = useState<number>(3);
   const [webpQV, setWebpQV] = useState<number>(75);
+  const [avifQuality, setAvifQuality] = useState<number>(23);
+  const [avifSpeed, setAvifSpeed] = useState<number>(6);
   const [gifFPS, setGifFPS] = useState<number>(15);
   const [gifMaxColors, setGifMaxColors] = useState<number>(256);
+  const [bmpBitDepth, setBmpBitDepth] = useState<number>(24);
+  const [bmpCompression, setBmpCompression] = useState<boolean>(false);
+  const [icoSizes, setIcoSizes] = useState<number[]>([16, 32, 48, 256]);
+  const [icoFitMode, setIcoFitMode] = useState<"pad" | "square">("pad");
   const [videoCrf, setVideoCrf] = useState<number>(23);
   const [webmCrf, setWebmCrf] = useState<number>(31);
   const [aviQV, setAviQV] = useState<number>(3);
@@ -141,9 +147,13 @@ function App() {
     let hasImage = false;
     let hasVideo = false;
     let hasAudio = false;
+    let hasHeic = false;
 
     for (const file of sourceFiles) {
-      if (
+      if (file.format === "HEIC") {
+        hasHeic = true;
+        hasImage = true;
+      } else if (
         file.format === "GIF" ||
         VIDEO_FORMATS.includes(file.format as VideoFormat)
       ) {
@@ -155,7 +165,7 @@ function App() {
       }
     }
 
-    return { hasImage, hasVideo, hasAudio };
+    return { hasImage, hasVideo, hasAudio, hasHeic };
   }, [sourceFiles]);
 
   const isMixedMediaType = useMemo(() => {
@@ -184,8 +194,14 @@ function App() {
     pngCompressionLevel,
     jpegQV,
     webpQV,
+    avifQuality,
+    avifSpeed,
     gifFPS,
     gifMaxColors,
+    bmpBitDepth,
+    bmpCompression,
+    icoSizes,
+    icoFitMode,
     videoCrf,
     webmCrf,
     aviQV,
@@ -199,9 +215,13 @@ function App() {
   const availableOutputFormats = useMemo<Format[]>(() => {
     if (sourceFiles.length === 0 || isMixedMediaType) return [];
 
+    // HEICが含まれる場合は PNG, JPEG, WebP のみに限定
+    if (mediaTypes.hasHeic) return ["PNG", "JPEG", "WebP"];
+
     if (mediaTypes.hasVideo) return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
     if (mediaTypes.hasAudio) return [...AUDIO_FORMATS];
-    return [...IMAGE_FORMATS];
+
+    return IMAGE_FORMATS.filter((format) => format !== "HEIC");
   }, [sourceFiles, isMixedMediaType, mediaTypes]);
 
   // 古い一時ファイルを破棄するヘルパー
@@ -315,7 +335,9 @@ function App() {
         const firstFile = nextFiles[0];
         if (firstFile?.format) {
           if (!append || prevFiles.length === 0) {
-            if (firstFile.format === "GIF") {
+            if (firstFile.format === "HEIC") {
+              setConvertedFormat("PNG");
+            } else if (firstFile.format === "GIF") {
               setConvertedFormat("MP4");
             } else if (
               VIDEO_FORMATS.includes(firstFile.format as VideoFormat)
@@ -406,7 +428,7 @@ function App() {
   ) => {
     let resizeOptions = {};
 
-    if (!isAudioFormat(convertedFormat)) {
+    if (!isAudioFormat(convertedFormat) && convertedFormat !== "ICO") {
       if (resizeMode === "uniform" && mediaDimensions) {
         resizeOptions = {
           width: resizeWidth,
@@ -465,6 +487,24 @@ function App() {
         return {
           ...resizeOptions,
           qVWebp: webpQV,
+        };
+      case "AVIF":
+        return {
+          ...resizeOptions,
+          avifQuality,
+          avifSpeed,
+        };
+      case "BMP":
+        return {
+          ...resizeOptions,
+          bmpBitDepth,
+          bmpCompression,
+        };
+      case "ICO":
+        return {
+          icoSizes,
+          icoFitMode,
+          antiAliasing,
         };
       case "GIF":
         return {
@@ -684,9 +724,28 @@ function App() {
   const handleFormatChange = (newFormat: Format) => {
     setConvertedFormat(newFormat);
 
-    if (mediaDimensions && VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
-      setResizeWidth(normalizeVideoDimension(resizeWidth));
-      setResizeHeight(normalizeVideoDimension(resizeHeight));
+    if (mediaDimensions) {
+      if (VIDEO_FORMATS.includes(newFormat as VideoFormat)) {
+        setResizeWidth(normalizeVideoDimension(resizeWidth));
+        setResizeHeight(normalizeVideoDimension(resizeHeight));
+      } else if (newFormat === "ICO") {
+        // ICO形式選択時、256x256以内にアスペクト比を維持してクランプ
+        const ratio = mediaDimensions.width / mediaDimensions.height;
+        let w = resizeWidth;
+        let h = resizeHeight;
+
+        if (w > 256 || h > 256) {
+          if (ratio >= 1) {
+            w = 256;
+            h = Math.max(1, Math.round(256 / ratio));
+          } else {
+            h = 256;
+            w = Math.max(1, Math.round(256 * ratio));
+          }
+        }
+        setResizeWidth(w);
+        setResizeHeight(h);
+      }
     }
   };
 
@@ -708,19 +767,23 @@ function App() {
     if (!mediaDimensions) return;
 
     const ratio = mediaDimensions.width / mediaDimensions.height;
+    const maxAllowed = convertedFormat === "ICO" ? 256 : MAX_DIMENSION;
+
     let width = axis === "width" ? clampDimension(value) : resizeWidth;
     let height = axis === "height" ? clampDimension(value) : resizeHeight;
 
     if (axis === "width") {
+      width = Math.min(width, maxAllowed);
       height = Math.round(width / ratio);
-      if (height > MAX_DIMENSION) {
-        height = MAX_DIMENSION;
+      if (height > maxAllowed) {
+        height = maxAllowed;
         width = Math.round(height * ratio);
       }
     } else {
+      height = Math.min(height, maxAllowed);
       width = Math.round(height * ratio);
-      if (width > MAX_DIMENSION) {
-        width = MAX_DIMENSION;
+      if (width > maxAllowed) {
+        width = maxAllowed;
         height = Math.round(width / ratio);
       }
     }
@@ -886,7 +949,7 @@ function App() {
                 onClick={clearAllSourceFiles}
                 className="cursor-pointer text-xs text-[#d76269] hover:underline"
               >
-                全クリア
+                {t("clearAll")}
               </button>
             )}
           </div>
@@ -957,7 +1020,7 @@ function App() {
                             })
                           }
                           className="group relative size-10 shrink-0 cursor-pointer overflow-hidden rounded border border-[#dfe5ef] [&_img]:size-full [&_img]:object-cover [&_video]:size-full [&_video]:object-cover"
-                          title="クリックで拡大表示"
+                          title={t("clickToEnlarge")}
                         >
                           <MediaPreview path={f.path} format={f.format} />
                           <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100 text-white text-[10px]">
@@ -977,7 +1040,7 @@ function App() {
                         type="button"
                         onClick={() => removeSourceFile(f.id)}
                         className="grid size-5 shrink-0 place-items-center rounded bg-[#eef2f7] text-[#8390a3] transition hover:bg-[#d76269] hover:text-white"
-                        title="削除"
+                        title={t("delete")}
                       >
                         ✕
                       </button>
@@ -988,14 +1051,14 @@ function App() {
 
               <div className="mt-4 flex items-center justify-between border-t border-[#edf0f5] pt-3 shrink-0">
                 <span className="text-xs text-[#8390a3]">
-                  計 {sourceFiles.length} 件
+                  {t("totalCount", { count: sourceFiles.length })}
                 </span>
                 <button
                   type="button"
                   onClick={() => selectFileWithDialog(true)}
                   className="rounded-md border border-[#c1cbde] bg-white px-3 py-1.5 text-xs font-semibold text-[#40506a] transition hover:bg-[#f4f6ff]"
                 >
-                  + 追加
+                  {t("addFile")}
                 </button>
               </div>
             </div>
@@ -1003,7 +1066,7 @@ function App() {
 
           {isMixedMediaType && (
             <p className="my-2 whitespace-pre-line text-[11px] leading-[1.6] text-[#d76269]">
-              画像・動画・音声ファイルが混ざっています。同じ種類のファイルのみ選択してください。
+              {t("mixedTypeWarning")}
             </p>
           )}
 
@@ -1190,8 +1253,10 @@ function App() {
               <div className="flex w-full flex-1 flex-col justify-between min-h-0">
                 <div className="flex flex-col min-h-0">
                   <strong className="block mb-3 text-sm text-[#3c4a60] shrink-0">
-                    {successfulConversionsCount} / {convertedResults.length} 件
-                    変換完了
+                    {t("convertedCount", {
+                      success: successfulConversionsCount,
+                      total: convertedResults.length,
+                    })}
                   </strong>
 
                   <div className="max-h-52 w-full overflow-y-auto pr-1">
@@ -1216,7 +1281,7 @@ function App() {
                                     })
                                   }
                                   className="group relative size-10 shrink-0 cursor-pointer overflow-hidden rounded border border-[#dfe5ef] [&_img]:size-full [&_img]:object-cover [&_video]:size-full [&_video]:object-cover"
-                                  title="クリックで拡大表示"
+                                  title={t("clickToEnlarge")}
                                 >
                                   <MediaPreview
                                     path={res.convertedFilePath}
@@ -1249,7 +1314,7 @@ function App() {
                               onClick={() => saveSingleFile(res)}
                               className="shrink-0 rounded bg-[#eef1ff] px-2 py-1 text-[11px] font-semibold text-[#586cec] transition hover:bg-[#6177f6] hover:text-white"
                             >
-                              保存
+                              {t("save")}
                             </button>
                           )}
                         </li>
@@ -1280,7 +1345,7 @@ function App() {
                     "
                     onClick={saveAllFiles}
                   >
-                    保存フォルダを選択して一括保存
+                    {t("saveAll")}
                   </button>
                 )}
               </div>
@@ -1334,10 +1399,10 @@ function App() {
           <div className="border-t border-[#edf0f5] px-5.5 py-4">
             {sourceFiles.length > 0 && !isAudioFormat(convertedFormat) ? (
               <div className="flex flex-col gap-5">
-                {sourceFiles.length > 1 && (
+                {sourceFiles.length > 1 && convertedFormat !== "ICO" && (
                   <div className="flex flex-col gap-1.5 rounded-lg bg-[#fafbff] p-3 border border-[#e8ecf4]">
                     <span className="text-xs font-semibold text-[#3c4a60]">
-                      複数ファイルのリサイズ処理:
+                      {t("multipleResizeMode")}
                     </span>
                     <div className="flex items-center gap-4 text-xs text-[#5b687c]">
                       <label className="flex items-center gap-1.5 cursor-pointer">
@@ -1349,7 +1414,7 @@ function App() {
                           onChange={() => setResizeMode("individual")}
                           className="accent-[#586cec]"
                         />
-                        それぞれの縦横比で変換
+                        {t("resizeIndividual")}
                       </label>
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
@@ -1360,30 +1425,33 @@ function App() {
                           onChange={() => setResizeMode("uniform")}
                           className="accent-[#586cec]"
                         />
-                        最初のファイルの縦横比に固定
+                        {t("resizeUniform")}
                       </label>
                     </div>
                   </div>
                 )}
 
-                {/* 複数ファイル時で「それぞれの縦横比で変換」が選ばれている場合はリサイズオプションを非表示 */}
-                {(sourceFiles.length <= 1 || resizeMode === "uniform") && (
-                  <ResizeOptions
-                    dimensions={mediaDimensions}
-                    aspectRatioLocked={aspectRatioLocked}
-                    antiAliasing={antiAliasing}
-                    width={resizeWidth}
-                    height={resizeHeight}
-                    isLoading={isProbingDimensions}
-                    error={dimensionProbeError}
-                    onAspectRatioLockedChange={handleAspectRatioLockedChange}
-                    onAntiAliasingChange={setAntiAliasing}
-                    onWidthChange={handleResizeWidthChange}
-                    onHeightChange={handleResizeHeightChange}
-                  />
-                )}
+                {/* ICO以外で「単一ファイル」または「最初のファイルの縦横比に固定」が選ばれている場合のみ標準リサイズオプションを表示 */}
+                {convertedFormat !== "ICO" &&
+                  (sourceFiles.length <= 1 || resizeMode === "uniform") && (
+                    <ResizeOptions
+                      dimensions={mediaDimensions}
+                      aspectRatioLocked={aspectRatioLocked}
+                      antiAliasing={antiAliasing}
+                      width={resizeWidth}
+                      height={resizeHeight}
+                      isLoading={isProbingDimensions}
+                      error={dimensionProbeError}
+                      onAspectRatioLockedChange={handleAspectRatioLockedChange}
+                      onAntiAliasingChange={setAntiAliasing}
+                      onWidthChange={handleResizeWidthChange}
+                      onHeightChange={handleResizeHeightChange}
+                    />
+                  )}
 
-                <div className="h-px w-full bg-[#edf0f5]" />
+                {convertedFormat !== "ICO" && (
+                  <div className="h-px w-full bg-[#edf0f5]" />
+                )}
 
                 {IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ? (
                   <ImageOptions
@@ -1395,10 +1463,22 @@ function App() {
                     onJpegQVChange={setJpegQV}
                     webpQV={webpQV}
                     onWebpQVChange={setWebpQV}
+                    avifQuality={avifQuality}
+                    onAvifQualityChange={setAvifQuality}
+                    avifSpeed={avifSpeed}
+                    onAvifSpeedChange={setAvifSpeed}
                     gifFPS={gifFPS}
                     onGifFPSChange={setGifFPS}
                     gifMaxColors={gifMaxColors}
                     onGifMaxColorsChange={setGifMaxColors}
+                    bmpBitDepth={bmpBitDepth}
+                    onBmpBitDepthChange={setBmpBitDepth}
+                    bmpCompression={bmpCompression}
+                    onBmpCompressionChange={setBmpCompression}
+                    icoSizes={icoSizes}
+                    onIcoSizesChange={setIcoSizes}
+                    icoFitMode={icoFitMode}
+                    onIcoFitModeChange={setIcoFitMode}
                   />
                 ) : (
                   <VideoOptions

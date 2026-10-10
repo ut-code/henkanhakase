@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum FileFormat {
+    #[serde(rename = "heic", alias = "heif")]
+    Heic,
+
     #[serde(rename = "png")]
     Png,
 
@@ -11,8 +14,17 @@ pub enum FileFormat {
     #[serde(rename = "webp")]
     Webp,
 
+    #[serde(rename = "avif")]
+    Avif,
+
     #[serde(rename = "gif")]
     Gif,
+
+    #[serde(rename = "bmp")]
+    Bmp,
+
+    #[serde(rename = "ico")]
+    Ico,
 
     #[serde(rename = "mp4")]
     Mp4,
@@ -57,10 +69,14 @@ pub enum FileFormat {
 impl FileFormat {
     pub fn extension(self) -> &'static str {
         match self {
+            Self::Heic => "heic",
             Self::Png => "png",
             Self::Jpeg => "jpg",
             Self::Webp => "webp",
+            Self::Avif => "avif",
             Self::Gif => "gif",
+            Self::Bmp => "bmp",
+            Self::Ico => "ico",
             Self::Mp4 => "mp4",
             Self::Webm => "webm",
             Self::Avi => "avi",
@@ -229,6 +245,13 @@ impl AudioOptions {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum IcoFitMode {
+    Pad,
+    Square,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversionOptions {
@@ -241,11 +264,19 @@ pub struct ConversionOptions {
     pub q_v_jpeg: Option<u32>,
     #[serde(rename = "qVWebp")]
     pub q_v_webp: Option<u32>,
+    pub avif_quality: Option<u32>,
+    pub avif_speed: Option<u32>,
     pub fps: Option<u32>,
     pub max_colors: Option<u32>,
     pub crf: Option<u32>,
     pub crf_vp9: Option<u32>,
     pub q_v_avi: Option<u32>,
+    pub bmp_bit_depth: Option<u32>,
+    pub bmp_compression: Option<bool>,
+
+    /// ICO 形式専用オプション
+    pub ico_sizes: Option<Vec<u32>>,
+    pub ico_fit_mode: Option<IcoFitMode>,
 
     /// 音声変換用オプション
     pub audio: Option<AudioOptions>,
@@ -253,6 +284,26 @@ pub struct ConversionOptions {
 
 impl ConversionOptions {
     pub fn validate(&self, output_format: FileFormat) -> Result<(), String> {
+        if output_format == FileFormat::Ico {
+            if let Some(width) = self.width {
+                if width > 256 {
+                    return Err("ICO形式の幅は最大256ピクセルまでです".into());
+                }
+            }
+            if let Some(height) = self.height {
+                if height > 256 {
+                    return Err("ICO形式の高さは最大256ピクセルまでです".into());
+                }
+            }
+            if let Some(sizes) = &self.ico_sizes {
+                for s in sizes {
+                    if !matches!(s, 16 | 24 | 32 | 48 | 64 | 128 | 256) {
+                        return Err("ICOの解像度サイズ指定が不正です".into());
+                    }
+                }
+            }
+        }
+
         if let Some(width) = self.width {
             if !(1..=16384).contains(&width) {
                 return Err("幅は 1〜16384 の範囲で指定してください".into());
@@ -283,6 +334,18 @@ impl ConversionOptions {
             }
         }
 
+        if let Some(avif_quality) = self.avif_quality {
+            if !(0..=63).contains(&avif_quality) {
+                return Err("avif_quality は 0〜63 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(avif_speed) = self.avif_speed {
+            if !(0..=10).contains(&avif_speed) {
+                return Err("avif_speed は 0〜10 の範囲で指定してください".into());
+            }
+        }
+
         if let Some(fps) = self.fps {
             if !(1..=120).contains(&fps) {
                 return Err("fps は 1〜120 の範囲で指定してください".into());
@@ -310,6 +373,14 @@ impl ConversionOptions {
         if let Some(q_v_avi) = self.q_v_avi {
             if !(1..=31).contains(&q_v_avi) {
                 return Err("q:v は 1〜31 の範囲で指定してください".into());
+            }
+        }
+
+        if let Some(bmp_bit_depth) = self.bmp_bit_depth {
+            if !matches!(bmp_bit_depth, 1 | 8 | 16 | 24 | 32) {
+                return Err(
+                    "bmp_bit_depth は 8 / 16 / 24 / 32 のいずれかを指定してください".into(),
+                );
             }
         }
 
