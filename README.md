@@ -33,6 +33,8 @@
 | `package-lock.json`         | npmの依存パッケージのバージョンを固定するためのファイル       |
 | `package.json`              | npmの設定ファイル                                             |
 | `README.md`                 | この文章                                                      |
+| `LICENSE`                   | ライセンス(MIT)                                               |
+| `src-tauri/licenses`        | 依存ライブラリのライセンス一覧。インストーラーに同梱される    |
 
 ## インストール
 
@@ -71,7 +73,7 @@
 2. Linux用のバイナリファイルの用意
    1. https://github.com/BtbN/FFmpeg-Builds/releases から`ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz`をダウンロード
    2. 解凍して出てくる`bin/ffmpeg`を`src-tauri/binaries`配下に設置
-   3. `fmpeg-x86_64-unknown-linux-gnu`にリネームする
+   3. `ffmpeg-x86_64-unknown-linux-gnu`にリネームする
 
 3. Windows用のバイナリファイルの用意
    1. https://www.gyan.dev/ffmpeg/builds/ から`ffmpeg-release-full.7z`をダウンロード
@@ -143,3 +145,53 @@
   ```bash
   ffmpeg -i input.jpg output.png
   ```
+
+## ライセンス
+
+本体のソースコードは [MIT License](LICENSE) で公開しています。
+
+ただし、アプリケーションに同梱している [FFmpeg](https://ffmpeg.org/) のバイナリ(`src-tauri/binaries`)は本体とは別のプログラムで、それぞれのビルドのライセンスに従います。
+
+| 配布先                                    | 同梱する FFmpeg | ビルド方法                 |
+| ----------------------------------------- | --------------- | -------------------------- |
+| GitHub(Windows / Linux / macOS)、Microsoft Store | GPLv3 版        | `npm run tauri build`      |
+| Mac App Store                             | LGPL 版         | `npm run tauri:build:lgpl` |
+
+FFmpeg を同梱して配布する場合は、配布したバイナリに対応する FFmpeg のソースコードを GitHub のリリースに添付してください。ライセンスの本文と説明は `src-tauri/licenses/FFmpeg-*.txt` にあり、インストーラーに同梱されます。
+
+### macOS 向け LGPL 版のビルド
+
+H.264 エンコーダの libx264 は GPL のため、LGPL 版では macOS 標準の VideoToolbox(`h264_videotoolbox`)を使います。`npm run tauri:build:lgpl` は Cargo の `lgpl-ffmpeg` feature を有効にしてビルドし、エンコーダを切り替えます(macOS でのみビルドできます)。
+
+- 画質(CRF)は VideoToolbox の `-q:v` に変換して指定します。Intel Mac では `-q:v` が使えないため、エンコーダの既定のビットレートになります
+- `-allow_sw 1` を付けているため、ハードウェアエンコーダが使えない環境ではソフトウェアエンコードになります
+- 同梱する FFmpeg は `--enable-gpl` を付けずにビルドした LGPL 版を使ってください。Homebrew の `ffmpeg` は GPL 版なので使えません。macOS で次のスクリプトを実行すると、依存ライブラリ(libvpx・LAME・Opus・Vorbis・WebP)ごと静的リンクでビルドされます
+
+  ```bash
+  brew install pkg-config nasm
+  scripts/build-ffmpeg-lgpl-macos.sh
+  ```
+
+  - `~/ffmpeg-lgpl/out` に、`src-tauri/binaries` に置くバイナリと、リリースに添付する対応ソースコード一式(`ffmpeg-lgpl-<version>-macos-src.tar.gz`)が出力されます
+  - ビルド後に、ライセンスが LGPL であること、必要なエンコーダがそろっていること、Homebrew などのライブラリに動的リンクしていないことを自動で検証します
+  - バージョンや設定はスクリプト冒頭のコメントを参照してください
+
+- Mac App Store ではアプリ全体がサンドボックスで動くため、同梱する FFmpeg にも `com.apple.security.app-sandbox` と `com.apple.security.inherit` の entitlements を付けて署名してください
+
+### 依存ライブラリのライセンス一覧
+
+配布物には `src-tauri/licenses` 配下のライセンス一覧を同梱しています。
+
+| ファイル                           | 内容                       | 更新方法                                                    |
+| ---------------------------------- | -------------------------- | ----------------------------------------------------------- |
+| `THIRD_PARTY_LICENSES_FRONTEND.txt` | フロントエンドのライブラリ | `npm run build` で自動生成(Git 管理外)                    |
+| `THIRD_PARTY_LICENSES_RUST.txt`    | Rust のクレート            | `npm run licenses` で生成(リリース前と Rust の依存を変えたとき) |
+| `THIRD_PARTY_LICENSES_OTHER.txt`   | Tailwind CSS、アイコンなど | 手動で編集                                                  |
+
+`npm run licenses` には [cargo-about](https://github.com/EmbarkStudios/cargo-about) が必要です。
+
+```bash
+cargo install --locked cargo-about --features cli
+```
+
+許可していないライセンスの依存を追加すると、生成時にエラーになります。問題ないライセンスであれば `vite.config.ts` または `src-tauri/about.toml` の許可リストに追加してください。

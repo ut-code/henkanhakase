@@ -1,13 +1,66 @@
+// @ts-expect-error node:fs is a nodejs module
+import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import license, { type Dependency } from "rollup-plugin-license";
 import { defineConfig } from "vite";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+// LICENSE ファイルが SPDX のメタデータしかないパッケージ(Tauri のプラグインなど)は、
+// 著作権表示を取り出して MIT の本文を補う
+function licenseTextOf(dep: Dependency): string {
+  const text = dep.licenseText ?? "";
+  if (!/^SPDXVersion:/.test(text)) return text;
+  const copyright = text.match(/^PackageCopyrightText: (.*)$/m)?.[1];
+  if (!copyright) throw new Error(`No copyright found for ${dep.name}`);
+  return readFileSync("LICENSE", "utf-8").replace(
+    /^Copyright .*$/m,
+    `Copyright (c) ${copyright}`,
+  );
+}
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // ビルド時にバンドルされたライブラリのライセンス一覧を書き出す
+    {
+      ...license({
+        thirdParty: {
+          allow: {
+            test: "(MIT OR Apache-2.0 OR BSD-3-Clause OR ISC OR 0BSD)",
+            failOnUnlicensed: true,
+            failOnViolation: true,
+          },
+          output: {
+            file: "src-tauri/licenses/THIRD_PARTY_LICENSES_FRONTEND.txt",
+            template: (dependencies) =>
+              [
+                "THIRD-PARTY SOFTWARE NOTICES (Frontend)",
+                "=======================================",
+                "",
+                "henkanhakase には以下のオープンソースソフトウェアが含まれています。",
+                "This software includes the following open source software.",
+                "",
+                ...dependencies.map((dep) =>
+                  [
+                    "--------------------------------------------------------------------------------",
+                    `${dep.name} ${dep.version} (${dep.license})`,
+                    "",
+                    licenseTextOf(dep),
+                    dep.noticeText ?? "",
+                  ].join("\n"),
+                ),
+              ].join("\n"),
+          },
+        },
+      }),
+      apply: "build" as const,
+    },
+  ],
 
   optimizeDeps: {
     exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"],

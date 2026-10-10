@@ -1,0 +1,26 @@
+FFmpeg
+======
+
+henkanhakase には FFmpeg (https://ffmpeg.org) の実行ファイルが同梱されています。
+FFmpeg は henkanhakase とは別のプログラムで、henkanhakase は FFmpeg を別プロセスとして起動して使用しています。
+
+This software bundles an executable of FFmpeg (https://ffmpeg.org).
+FFmpeg is a separate program, invoked by henkanhakase as a subprocess.
+
+同梱している FFmpeg のライセンス / License of the bundled FFmpeg
+----------------------------------------------------------------
+
+- Windows / Linux 版、GitHub で配布する macOS 版:
+  GNU General Public License version 3 or later (FFmpeg-COPYING.GPLv3.txt)
+- Mac App Store 版:
+  GNU Lesser General Public License version 2.1 or later (FFmpeg-COPYING.LGPLv2.1.txt)
+
+正確なライセンスは同梱の FFmpeg で `ffmpeg -L` を実行して確認できます。
+LGPLv3 の本文 (FFmpeg-COPYING.LGPLv3.txt) は、FFmpeg を LGPLv3 で利用する場合のために同梱しています。
+
+ソースコード / Source code
+--------------------------
+
+同梱している FFmpeg に対応するソースコードは、各リリースのページ
+(https://github.com/ut-code/henkanhakase/releases) から入手できます。
+The corresponding source code of the bundled FFmpeg is available on the release page above.
