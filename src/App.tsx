@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
 import UploadIcon from "./assets/upload.svg";
+import Logo from "./assets/logo.svg";
 import { AudioOptions } from "./components/AudioOptions";
 import { ConversionProgress } from "./components/ConversionProgress";
 import { FormatDropdown } from "./components/FormatDropdown";
@@ -76,7 +77,9 @@ function App() {
   const [convertedFormat, setConvertedFormat] = useState<Format>("PNG");
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [isConverting, setIsConverting] = useState(false);
-  const [conversionProgress, setConversionProgress] = useState<number | null>(null);
+  const [conversionProgress, setConversionProgress] = useState<number | null>(
+    null,
+  );
   const activeConversionId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mediaDimensions, setMediaDimensions] =
@@ -121,9 +124,15 @@ function App() {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    void listen<{ conversionId: string; progress: number | null }>("conversion-progress", (event) => {
-      if (event.payload.conversionId === activeConversionId.current) setConversionProgress(event.payload.progress);
-    }).then((dispose) => { unlisten = dispose; });
+    void listen<{ conversionId: string; progress: number | null }>(
+      "conversion-progress",
+      (event) => {
+        if (event.payload.conversionId === activeConversionId.current)
+          setConversionProgress(event.payload.progress);
+      },
+    ).then((dispose) => {
+      unlisten = dispose;
+    });
     return () => unlisten?.();
   }, []);
 
@@ -786,16 +795,7 @@ function App() {
             text-[#1d2c43]
           "
         >
-          <span
-            className="
-              grid size-7 place-items-center
-              rounded-lg
-              bg-linear-to-br from-[#5d75f6] to-[#8768ec]
-              text-[15px] text-white
-            "
-          >
-            H
-          </span>
+          <img src={Logo} alt="" className="size-10" />
           {t("appName")}
         </div>
 
