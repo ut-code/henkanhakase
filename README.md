@@ -11,31 +11,51 @@
 
 ## ディレクトリ構成
 
+### 追跡ディレクトリ
+
 | パス                        | 内容                                                          |
 | --------------------------- | ------------------------------------------------------------- |
-| `dist`                      | ビルド成果物の出力先ディレクトリ。`npm run build`で生成される |
-| `node_modules`              | npmの依存パッケージ。`npm install`で生成される                |
 | `public`                    | ビルド後にルートに置かれる。画像など                          |
+| `scripts/build-ffmpeg-lgpl-macos.sh` | MacOS向けLGPL版FFmpegのビルドスクリプト                       |
 | `src/assets`              | 画像など。importして使える                                            |
 | `src/components`            | Reactのコンポーネント                                          |
+| `src/utils/dimension.ts` | 画像や動画のサイズの正規化                                   |
+| `src/utils/error.ts` | エラーの関数                                                |
+| `src/utils/path.ts` | ファイルパスに関する関数                                                |
 | `src/App.css`               | スタイルシート                                                |
+| `src/formats.tsx`            | 変換可能なファイル形式の定義                                    |
 | `src/App.tsx`               | フロントエンドの本体                                          |
-| `src-tauri/binaries`        | FFmpegのバイナリファイル。sidecarで使用されている             |
-| `src-tauri/binaries-lgpl`   | Mac App Store 向けの LGPL 版 FFmpeg のバイナリファイル         |
+| `src/i18n.tsx`                | 多言語対応の設定                                              |
 | `src-tauri/icons`           | アプリケーションアイコン                                      |
-| `src-tauri/src/conversion/ffmpeg.rs` | FFmpegのコマンドの組み立て                                        |
+| `src-tauri/licenses`        | 依存ライブラリのライセンス一覧。インストーラーに同梱される    |
+| `src-tauri/src/conversion/error.rs` | 変換処理におけるエラーの定義                            |
+| `src-tauri/src/conversion/ffmpeg.rs` | FFmpegのコマンドの組み立て                            |
 | `src-tauri/src/conversion/mod.rs`    | 変換処理のモジュール                                          |
-| `src-tauri/src/conversion/types.rs`  | 変換処理の型定義                                              |
+| `src-tauri/src/conversion/progress.rs`    | 変換処理の進行状況                                |
+| `src-tauri/src/conversion/types.rs`  | 変換処理の型定義                                      |
 | `src-tauri/src/lib.rs`      | 変換処理の呼び出し                                            |
 | `src-tauri/.gitignore`      | Gitで管理しないファイルの設定(バックエンド)                   |
+| `src-tauri/about.hbs` | Rustで使用している依存ライブラリのライセンス一覧を表示するためのテンプレート |
 | `src-tauri/tauri.conf.json` | Tauriの設定ファイル                                           |
+| `src-tauri/tauri.lgpl.conf.json` | TauriのLGPL版の設定ファイル(同梱するバイナリをLGPL版に上書き)                  |
+| `src-tauri/build.rs` | Tauriのビルドスクリプト。LGPL版の場合に同梱バイナリがLGPLかどうかを確認する |
+| `src-tauri/about.toml`      | Rustのライセンス依存情報                                   |
 | `src-tauri/Cargo.toml`      | Rustの設定ファイル                                            |
 | `.gitignore`                | Gitで管理しないファイルの設定                                 |
 | `package-lock.json`         | npmの依存パッケージのバージョンを固定するためのファイル       |
 | `package.json`              | npmの設定ファイル                                             |
-| `README.md`                 | この文章                                                      |
 | `LICENSE`                   | ライセンス(MIT)                                               |
-| `src-tauri/licenses`        | 依存ライブラリのライセンス一覧。インストーラーに同梱される    |
+| `README.md`                 | この文章                                                      |
+
+### 非追跡ディレクトリ
+
+| パス                        | 内容                                                          |
+| --------------------------- | ------------------------------------------------------------- |
+| `dist`                      | ビルド成果物の出力先ディレクトリ。`npm run build`で生成される |
+| `node_modules`              | npmの依存パッケージ。`npm install`で生成される                |
+| `src-tauri/binaries`        | FFmpegのバイナリファイル。sidecarで使用されている             |
+| `src-tauri/binaries-lgpl`   | Mac App Store 向けの LGPL 版 FFmpeg のバイナリファイル         |
+| `src-tauri/target/release/bundle` | Tauriのビルド成果物の出力先ディレクトリ。`npm run tauri build`で生成される |
 
 ## インストール
 
@@ -97,6 +117,13 @@
    chmod +x src-tauri/binaries/ffmpeg-*
    ```
 
+7. Mac App Store向けLGPL版のFFmpegのビルド(MacOSでのみビルド可能)
+
+   ```bash
+   brew install pkg-config nasm
+   scripts/build-ffmpeg-lgpl-macos.sh
+   ```
+
 ## 開発
 
 - 依存パッケージのインストール(`package.json`が更新されたときに実行)
@@ -124,10 +151,14 @@
   ```
 
 - アプリケーションをビルド
-
-  ```bash
-  npm run tauri build
-  ```
+  - GPL版の場合
+   ```bash
+   npm run tauri build
+   ```
+- LGPL版の場合
+   ```bash
+   npm run tauri:build:lgpl
+   ```
 
 - FFmpegのインストール(バイナリファイルを設置するため、インストールしなくてもアプリケーションは動作する)
   - Windowsの場合
