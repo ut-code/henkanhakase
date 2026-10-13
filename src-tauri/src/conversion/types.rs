@@ -297,7 +297,7 @@ impl ConversionOptions {
             }
             if let Some(sizes) = &self.ico_sizes {
                 for s in sizes {
-                    if !matches!(s, 16 | 24 | 32 | 48 | 64 | 128 | 256) {
+                    if !matches!(s, 32 | 64 | 128 | 256) {
                         return Err("ICOの解像度サイズ指定が不正です".into());
                     }
                 }

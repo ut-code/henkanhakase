@@ -6,8 +6,8 @@ import { copyFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
-import UploadIcon from "./assets/upload.svg";
 import Logo from "./assets/logo.svg";
+import UploadIcon from "./assets/upload.svg";
 import { AudioOptions } from "./components/AudioOptions";
 import { ConversionProgress } from "./components/ConversionProgress";
 import { FormatDropdown } from "./components/FormatDropdown";
@@ -110,7 +110,7 @@ function App() {
   const [gifMaxColors, setGifMaxColors] = useState<number>(256);
   const [bmpBitDepth, setBmpBitDepth] = useState<number>(24);
   const [bmpCompression, setBmpCompression] = useState<boolean>(false);
-  const [icoSizes, setIcoSizes] = useState<number[]>([16, 32, 48, 256]);
+  const [icoSizes, setIcoSizes] = useState<number[]>([64, 256]);
   const [icoFitMode, setIcoFitMode] = useState<"pad" | "square">("pad");
   const [videoCrf, setVideoCrf] = useState<number>(23);
   const [webmCrf, setWebmCrf] = useState<number>(31);

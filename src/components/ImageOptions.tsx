@@ -33,7 +33,7 @@ export type ImageOptionsProps = {
   onIcoFitModeChange?: (mode: "pad" | "square") => void;
 };
 
-const ICO_AVAILABLE_SIZES = [16, 24, 32, 48, 64, 128, 256];
+const ICO_AVAILABLE_SIZES = [32, 64, 128, 256];
 
 export function ImageOptions({
   format,
@@ -56,7 +56,7 @@ export function ImageOptions({
   onBmpBitDepthChange,
   bmpCompression = false,
   onBmpCompressionChange,
-  icoSizes = [16, 32, 48, 256],
+  icoSizes = [64, 256],
   onIcoSizesChange,
   icoFitMode = "pad",
   onIcoFitModeChange,
