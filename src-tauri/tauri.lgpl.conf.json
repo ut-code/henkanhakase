@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "externalBin": ["binaries-lgpl/ffmpeg"],
+    "resources": {
+      "licenses/FFmpeg-COPYING.GPLv3.txt": null,
+      "licenses/FFmpeg-NOTICE.txt": null,
+      "licenses/FFmpeg-NOTICE.lgpl.txt": "licenses/FFmpeg-NOTICE.txt"
+    }
+  }
+}

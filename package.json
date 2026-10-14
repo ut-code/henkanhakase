@@ -1,14 +1,17 @@
 {
   "name": "henkanhakase",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "check": "biome check --write",
+    "licenses": "cd src-tauri && cargo about generate about.hbs -o licenses/THIRD_PARTY_LICENSES_RUST.txt",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:build:lgpl": "tauri build --features lgpl-ffmpeg --config src-tauri/tauri.lgpl.conf.json"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",
@@ -32,6 +35,7 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "lefthook": "^2.1.10",
+    "rollup-plugin-license": "^3.7.1",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }

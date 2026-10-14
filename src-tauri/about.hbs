@@ -1,0 +1,18 @@
+THIRD-PARTY SOFTWARE NOTICES (Rust)
+===================================
+
+henkanhakase には以下のオープンソースソフトウェアが含まれています。
+This software includes the following open source software.
+
+{{#each licenses}}
+--------------------------------------------------------------------------------
+{{{name}}} ({{{id}}})
+
+Used by:
+{{#each used_by}}
+  - {{{crate.name}}} {{{crate.version}}}{{#if crate.repository}} ({{{crate.repository}}}){{/if}}
+{{/each}}
+
+{{{text}}}
+
+{{/each}}

@@ -2,6 +2,26 @@ use std::path::Path;
 
 use super::types::{ConversionOptions, FileFormat, IcoFitMode};
 
+// libx264 は GPL のため、LGPL 版の FFmpeg を同梱するビルド(Mac App Store 向けなど)では
+// `lgpl-ffmpeg` feature を有効にして macOS 標準の VideoToolbox で H.264 にエンコードする
+#[cfg(all(feature = "lgpl-ffmpeg", not(target_os = "macos")))]
+compile_error!("`lgpl-ffmpeg` は VideoToolbox を使うため macOS 向けのビルドでのみ有効にできます");
+
+/// H.264 のエンコーダ指定
+fn h264_encoder_args() -> Vec<String> {
+    if !cfg!(feature = "lgpl-ffmpeg") {
+        return vec!["-c:v".into(), "libx264".into()];
+    }
+    // VideoToolbox は既定でハードウェアエンコーダ必須のため、使えない環境(仮想マシンなど)では
+    // ソフトウェアエンコードに切り替える
+    vec![
+        "-c:v".into(),
+        "h264_videotoolbox".into(),
+        "-allow_sw".into(),
+        "1".into(),
+    ]
+}
+
 pub fn build_args(
     input_path: &Path,
     output_path: &Path,
@@ -219,7 +239,7 @@ fn build_default_args(
         match output_format {
             FileFormat::Mp4 | FileFormat::Mov => {
                 if let Some(crf) = options.crf {
-                    args.extend(["-crf".into(), crf.to_string()]);
+                    args.extend(h264_quality_args(crf));
                 }
             }
 
@@ -505,12 +525,8 @@ fn build_video_to_audio_args(
 fn append_video_output_options(args: &mut Vec<String>, format: FileFormat) {
     match format {
         FileFormat::Mp4 => {
-            args.extend([
-                "-c:v".into(),
-                "libx264".into(),
-                "-pix_fmt".into(),
-                "yuv420p".into(),
-            ]);
+            args.extend(h264_encoder_args());
+            args.extend(["-pix_fmt".into(), "yuv420p".into()]);
         }
 
         FileFormat::Webm => {
@@ -523,12 +539,8 @@ fn append_video_output_options(args: &mut Vec<String>, format: FileFormat) {
         }
 
         FileFormat::Mov => {
-            args.extend([
-                "-c:v".into(),
-                "libx264".into(),
-                "-pix_fmt".into(),
-                "yuv420p".into(),
-            ]);
+            args.extend(h264_encoder_args());
+            args.extend(["-pix_fmt".into(), "yuv420p".into()]);
         }
 
         FileFormat::Avi => {
@@ -537,6 +549,24 @@ fn append_video_output_options(args: &mut Vec<String>, format: FileFormat) {
 
         _ => {}
     }
+}
+
+/// H.264 の画質指定。UI では CRF(0〜51、小さいほど高画質)で受け取り、エンコーダに合わせて変換する
+fn h264_quality_args(crf: u32) -> Vec<String> {
+    if !cfg!(feature = "lgpl-ffmpeg") {
+        return vec!["-crf".into(), crf.to_string()];
+    }
+    // VideoToolbox の固定画質モード(-q:v)は Apple Silicon でのみ使える。
+    // Intel Mac ではエンコーダの既定のビットレートに任せる
+    if cfg!(target_arch = "aarch64") {
+        return vec!["-q:v".into(), crf_to_videotoolbox_quality(crf).to_string()];
+    }
+    vec![]
+}
+
+/// CRF(0〜51、小さいほど高画質)を VideoToolbox の -q:v(1〜100、大きいほど高画質)に変換する
+fn crf_to_videotoolbox_quality(crf: u32) -> u32 {
+    100 - crf.min(51) * 99 / 51
 }
 
 // ============================================================
@@ -590,7 +620,14 @@ fn path_to_string(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::build_scale_filter;
+    use super::{build_scale_filter, crf_to_videotoolbox_quality};
+
+    #[test]
+    fn maps_crf_to_videotoolbox_quality() {
+        assert_eq!(crf_to_videotoolbox_quality(0), 100);
+        assert_eq!(crf_to_videotoolbox_quality(23), 56);
+        assert_eq!(crf_to_videotoolbox_quality(51), 1);
+    }
 
     #[test]
     fn uses_lanczos_when_anti_aliasing_is_enabled() {

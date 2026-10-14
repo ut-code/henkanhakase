@@ -24,3 +24,5 @@ dist-ssr
 *.sln
 *.sw?
 .agents/*
+# npm run build で自動生成される
+src-tauri/licenses/THIRD_PARTY_LICENSES_FRONTEND.txt
