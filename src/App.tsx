@@ -215,8 +215,9 @@ function App() {
   const availableOutputFormats = useMemo<Format[]>(() => {
     if (sourceFiles.length === 0 || isMixedMediaType) return [];
 
-    // HEICが含まれる場合は PNG, JPEG, WebP のみに限定
-    if (mediaTypes.hasHeic) return ["PNG", "JPEG", "WebP"];
+    // HEICが含まれる場合は 画像フォーマット全般（HEIC以外）を選択可能にする
+    if (mediaTypes.hasHeic)
+      return IMAGE_FORMATS.filter((format) => format !== "HEIC");
 
     if (mediaTypes.hasVideo) return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
     if (mediaTypes.hasAudio) return [...AUDIO_FORMATS];
