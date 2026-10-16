@@ -122,8 +122,11 @@ fn build_ico_multi_size_args(
         let filter = match fit_mode {
             IcoFitMode::Pad => {
                 format!(
-                    "[in{i}]scale=w='min({s}\\,iw)':h='min({s}\\,ih)':force_original_aspect_ratio=decrease:flags={flags},pad={s}:{s}:(ow-iw)/2:(oh-ih)/2:color=0x00000000,setsar=1[out{i}]"
-                )
+                        "[in{i}]scale='if(gt(iw,ih),{s},-1)':'if(gt(iw,ih),-1,{s})':flags={flags},pad={s}:{s}:(ow-iw)/2:(oh-ih)/2:color=black@0.0,setsar=1[out{i}]",
+                        s = s,
+                        flags = flags,
+                        i = i
+                    )
             }
             IcoFitMode::Square => {
                 format!("[in{i}]scale={s}:{s}:flags={flags},setsar=1[out{i}]")
