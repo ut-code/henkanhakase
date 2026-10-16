@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { copyFile } from "@tauri-apps/plugin-fs";
+import { copyFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
@@ -38,6 +38,10 @@ import {
 } from "./utils/dimension.ts";
 import { apiErrorMessage } from "./utils/error.ts";
 import { detectFormatFromPath, getExtensionFromPath } from "./utils/path.ts";
+import {
+  convertSvgToPngTempFile,
+  parseSvgDimensions,
+} from "./utils/svgConverter.ts";
 
 interface SourceFileItem {
   id: string;
@@ -217,12 +221,16 @@ function App() {
 
     // HEICが含まれる場合は 画像フォーマット全般（HEIC以外）を選択可能にする
     if (mediaTypes.hasHeic)
-      return IMAGE_FORMATS.filter((format) => format !== "HEIC");
+      return IMAGE_FORMATS.filter(
+        (format) => format !== "HEIC" && format !== "SVG",
+      );
 
     if (mediaTypes.hasVideo) return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
     if (mediaTypes.hasAudio) return [...AUDIO_FORMATS];
 
-    return IMAGE_FORMATS.filter((format) => format !== "HEIC");
+    return IMAGE_FORMATS.filter(
+      (format) => format !== "HEIC" && format !== "SVG",
+    );
   }, [sourceFiles, isMixedMediaType, mediaTypes]);
 
   // 古い一時ファイルを破棄するヘルパー
@@ -248,15 +256,18 @@ function App() {
     const probeId = ++dimensionProbeId.current;
 
     try {
-      const dimensions = await invoke<MediaDimensions>(
-        "probe_media_dimensions",
-        {
+      let dimensions: MediaDimensions;
+      if (file.format === "SVG") {
+        const svgText = await readTextFile(file.path);
+        dimensions = parseSvgDimensions(svgText);
+      } else {
+        dimensions = await invoke<MediaDimensions>("probe_media_dimensions", {
           request: {
             inputPath: file.path,
             inputFormat: formatToExtension(file.format),
           },
-        },
-      );
+        });
+      }
 
       if (probeId !== dimensionProbeId.current) return;
 
@@ -336,7 +347,7 @@ function App() {
         const firstFile = nextFiles[0];
         if (firstFile?.format) {
           if (!append || prevFiles.length === 0) {
-            if (firstFile.format === "HEIC") {
+            if (firstFile.format === "HEIC" || firstFile.format === "SVG") {
               setConvertedFormat("PNG");
             } else if (firstFile.format === "GIF") {
               setConvertedFormat("MP4");
@@ -610,6 +621,7 @@ function App() {
     const newResults: ConvertedResultItem[] = [];
 
     for (const file of sourceFiles) {
+      let tempPngPathToCleanup: string | null = null;
       try {
         const conversionId = crypto.randomUUID();
         activeConversionId.current = conversionId;
@@ -621,30 +633,82 @@ function App() {
         let fileDimensions: MediaDimensions | null = null;
         if (!isAudioFormat(convertedFormat) && resizeMode === "individual") {
           try {
-            fileDimensions = await invoke<MediaDimensions>(
-              "probe_media_dimensions",
-              {
-                request: {
-                  inputPath: file.path,
-                  inputFormat: inputExtension,
+            if (file.format === "SVG") {
+              const svgText = await readTextFile(file.path);
+              fileDimensions = parseSvgDimensions(svgText);
+            } else {
+              fileDimensions = await invoke<MediaDimensions>(
+                "probe_media_dimensions",
+                {
+                  request: {
+                    inputPath: file.path,
+                    inputFormat: inputExtension,
+                  },
                 },
-              },
-            );
+              );
+            }
           } catch (probeErr) {
             console.warn("Probe error for file:", file.name, probeErr);
           }
         }
 
+        let inputPathForConversion = file.path;
+        let inputFormatForConversion = inputExtension;
+
+        // SVGの変換処理分岐
+        if (file.format === "SVG") {
+          const targetW = mediaDimensions ? resizeWidth : undefined;
+          const targetH = mediaDimensions ? resizeHeight : undefined;
+
+          // JS側でSVG -> 一時PNGを生成
+          const tempPng = await convertSvgToPngTempFile(
+            file.path,
+            targetW,
+            targetH,
+          );
+          tempPngPathToCleanup = tempPng;
+
+          if (convertedFormat === "PNG") {
+            // 出力形式がPNGの場合は、直接一時PNGを出力として採用する (二重変換回避)
+            const sequenceKey = stem;
+            const sequence =
+              (outputConversionSequences.current.get(sequenceKey) ?? 0) + 1;
+            outputConversionSequences.current.set(sequenceKey, sequence);
+            const outputName = `${stem}_${sequence}.${extension}`;
+
+            newResults.push({
+              id: file.id,
+              sourceName: file.name,
+              convertedFilePath: tempPng,
+              convertedFileName: outputName,
+              convertedFileFormat: convertedFormat,
+              error: null,
+            });
+            continue;
+          }
+
+          // PNG以外の他形式へ変換する場合は生成した一時PNGをFFmpeg処理に渡す
+          inputPathForConversion = tempPng;
+          inputFormatForConversion = "png";
+        }
+
         const outputTempPath = await invoke<string>("convert_file", {
           request: {
-            inputPath: file.path,
+            inputPath: inputPathForConversion,
             stem,
             conversionId,
-            inputFormat: inputExtension,
+            inputFormat: inputFormatForConversion,
             outputFormat: extension,
             options: buildConversionOptions(fileDimensions),
           },
         });
+
+        // SVGから他形式への変換で使用した一時PNGの削除処理
+        if (tempPngPathToCleanup) {
+          invoke("cleanup_temp_file", { path: tempPngPathToCleanup }).catch(
+            console.error,
+          );
+        }
 
         const sequenceKey = stem;
         const sequence =
@@ -661,6 +725,11 @@ function App() {
           error: null,
         });
       } catch (err) {
+        if (tempPngPathToCleanup) {
+          invoke("cleanup_temp_file", { path: tempPngPathToCleanup }).catch(
+            console.error,
+          );
+        }
         // 個別のエラーハンドリング：失敗してもループを中断しない
         newResults.push({
           id: file.id,
@@ -1362,7 +1431,7 @@ function App() {
           w-[min(1190px,calc(100%-96px))]
           overflow-hidden
           rounded-xl
-          border border-[#e2e7f0]
+          border border-[#e2e2f0]
           bg-white/85
 
           max-[980px]:w-[calc(100%-40px)]

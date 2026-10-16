@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import license, { type Dependency } from "rollup-plugin-license";
 import { defineConfig } from "vite";
+import wasm from "vite-plugin-wasm";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
@@ -25,6 +26,7 @@ function licenseTextOf(dep: Dependency): string {
 export default defineConfig(async () => ({
   plugins: [
     react(),
+    wasm(),
     tailwindcss(),
     // ビルド時にバンドルされたライブラリのライセンス一覧を書き出す
     {
