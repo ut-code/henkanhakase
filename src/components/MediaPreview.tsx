@@ -1,13 +1,12 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useEffect, useRef, useState } from "react";
 import {
-  IMAGE_FORMATS,
-  VIDEO_FORMATS,
   type Format,
+  IMAGE_FORMATS,
   type ImageFormat,
+  VIDEO_FORMATS,
   type VideoFormat,
-  formatToExtension,
 } from "../formats.ts";
 
 type MediaPreviewProps = {
@@ -50,15 +49,32 @@ export function MediaPreview({ path, format }: MediaPreviewProps) {
       setThumbnailUrl(objectUrl);
     };
 
-    if (
+    if (!isTauri()) {
+      if (format === "GIF" || IMAGE_FORMATS.includes(format as ImageFormat)) {
+        setThumbnailUrl(path);
+      } else if (VIDEO_FORMATS.includes(format as VideoFormat)) {
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        video.muted = true;
+        video.src = path;
+        video.onloadeddata = () => {
+          video.currentTime = 0.001;
+        };
+        video.onseeked = () => {
+          if (cancelled) return;
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          canvas.getContext("2d")?.drawImage(video, 0, 0);
+          canvas.toBlob((blob) => blob && show(blob), "image/jpeg");
+        };
+      }
+    } else if (
       format === "GIF" ||
       VIDEO_FORMATS.includes(format as VideoFormat)
     ) {
       invoke<number[] | Uint8Array>("generate_thumbnail", {
-        request: {
-          inputPath: path,
-          inputFormat: formatToExtension(format),
-        },
+        request: { inputPath: path, inputFormat: format.toLowerCase() },
       })
         .then((result) => {
           const bytes =
@@ -89,6 +105,11 @@ export function MediaPreview({ path, format }: MediaPreviewProps) {
   useEffect(() => {
     setAnimatedUrl(null);
     if (!path || !isGif || !hovered) return;
+
+    if (!isTauri()) {
+      setAnimatedUrl(path);
+      return;
+    }
 
     let cancelled = false;
     let objectUrl: string | null = null;

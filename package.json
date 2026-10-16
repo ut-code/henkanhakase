@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:web": "tsc && vite build --mode browser",
     "check": "biome check --write",
     "licenses": "cd src-tauri && cargo about generate about.hbs -o licenses/THIRD_PARTY_LICENSES_RUST.txt",
     "preview": "vite preview",

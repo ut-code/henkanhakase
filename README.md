@@ -19,11 +19,15 @@
 | `scripts/build-ffmpeg-lgpl-macos.sh` | MacOS向けLGPL版FFmpegのビルドスクリプト                       |
 | `src/assets`              | 画像など。importして使える                                            |
 | `src/components`            | Reactのコンポーネント                                          |
-| `src/utils/dimension.ts` | 画像や動画のサイズの正規化                                   |
-| `src/utils/error.ts` | エラーの関数                                                |
-| `src/utils/path.ts` | ファイルパスに関する関数                                                |
+| `src/utils/browser-ffmpeg-browser.ts` | `@ffmpeg/core` WASMの読み込み、ブラウザ上の調査・変換 |
+| `src/utils/browser-ffmpeg-desktop.ts` | デスクトップ版でブラウザ用WASMを誤って呼ばないための代替処理 |
+| `src/utils/dimension.ts`    | 画像や動画のサイズの正規化                                       |
+| `src/utils/error.ts`        | Tauriから返されたエラーコードを画面表示用の文章へ変換           |
+| `src/utils/ffmpeg-command.ts` | サイズ調査・サムネイル作成用のFFmpeg引数とPNGサイズ解析       |
+| `src/utils/ffmpeg.ts`       | ブラウザ版FFmpegに渡す変換指示の組み立て                         |
+| `src/utils/path.ts`         | ファイルパスから拡張子と入力形式を判定                           |
 | `src/App.css`               | スタイルシート                                                |
-| `src/formats.tsx`            | 変換可能なファイル形式の定義                                    |
+| `src/formats.ts`             | 変換可能なファイル形式、拡張子、MIME typeの定義                 |
 | `src/App.tsx`               | フロントエンドの本体                                          |
 | `src/i18n.tsx`                | 多言語対応の設定                                              |
 | `src-tauri/icons`           | アプリケーションアイコン                                      |
@@ -46,6 +50,40 @@
 | `package.json`              | npmの設定ファイル                                             |
 | `LICENSE`                   | ライセンス(MIT)                                               |
 | `README.md`                 | この文章                                                      |
+
+### ブラウザ版とデスクトップ版の変換処理の対応
+
+`src/utils/` と `src-tauri/src/` は、同じ変換機能を別の実行環境で実装する
+ためのコードですが、ファイル構成や処理内容が完全に同じではありません。
+ブラウザ版はTypeScriptから`@ffmpeg/core`のWASMを実行し、デスクトップ版は
+Rustから同梱したFFmpegの補助実行ファイルを実行します。
+
+| ブラウザ版 (`src/utils`) | デスクトップ版 (`src-tauri/src/conversion`) | 対応する処理 |
+| --- | --- | --- |
+| `ffmpeg.ts` | `ffmpeg.rs` | 入力形式・出力形式・設定値からFFmpegの実行指示を組み立てる。動画、GIF、音声、サイズ変更などの主要な分岐が対応する |
+| `ffmpeg-command.ts` の`buildProbeArgs`、`parsePngDimensions` | `mod.rs` の`probe_dimensions`、`parse_png_dimensions` | 入力から1枚のPNG画像を作り、そのPNGの情報から幅・高さを取得する |
+| `ffmpeg-command.ts` の`buildThumbnailArgs` | `mod.rs` の`generate_thumbnail` | 動画やGIFからサムネイル画像を作る |
+| `browser-ffmpeg-browser.ts` | `mod.rs` の`convert` | 実際の変換を実行する。ブラウザ版はWASM、デスクトップ版は補助実行ファイルを使う |
+| `browser-ffmpeg-browser.ts` の`probeBrowserFile` | `mod.rs` の`probe_dimensions` | 入力ファイルの幅・高さを取得する。ブラウザ版はImage/Video API、デスクトップ版はFFmpegを使う |
+| `browser-ffmpeg-desktop.ts` | 対応するRust処理なし | デスクトップ版にGPLの`@ffmpeg/core`を取り込まず、ブラウザ用処理が呼ばれた場合は明示的にエラーにする |
+| `error.ts` | `error.rs` | エラーコードを扱う。TypeScript側は画面表示用の文章へ変換し、Rust側はTauriで返せる形にする |
+
+次の処理はデスクトップ版だけに存在し、`src/utils/`には一対一の対応処理がありません。
+
+- `conversion/mod.rs`: 補助実行ファイルの起動、キャンセル、進み具合の通知、一時ファイルの管理
+- `conversion/types.rs`: Rust側の入力形式、変換設定、Tauriから受け取るデータの定義と検証
+- `conversion/heic.rs`: `heif-oxide`を使ったHEICの変換、サイズ取得、サムネイル作成
+- `conversion/progress.rs`: FFmpegの出力を進み具合の割合へ変換
+- `path.ts`: 画面側で必要なファイル名・拡張子の判定であり、Rust側のパス管理とは役割が異なる
+- `dimension.ts`: 画面から受け取ったサイズを整える処理であり、Rust側の`ConversionOptions::validate`とは目的が異なる
+
+また、`ffmpeg.ts`と`ffmpeg.rs`は完全に同じ実装ではありません。Rust側には、
+デスクトップ固有の進み具合通知、複数サイズのICO作成、AVIF/BMPの詳細設定、
+LGPL版でH.264の方式を切り替える処理があります。一方、ブラウザ側は
+WASMで利用できる方式を前提に実行指示を作ります。
+
+新しい変換形式や設定を追加するときは、両方の実装と、デスクトップGPL版、
+デスクトップLGPL版、ブラウザWASM版のすべてを確認してください。
 
 ### 非追跡ディレクトリ
 
@@ -159,6 +197,22 @@
    ```bash
    npm run tauri:build:lgpl
    ```
+
+- ブラウザ版をビルド
+
+  ```bash
+  npm run build:web
+  ```
+
+  ブラウザ版は `dist-web` に出力され、`@ffmpeg/core` の WebAssembly
+  ファイルを使用します。通常の `npm run build` および Tauri のビルドは
+  `dist` に出力され、ブラウザ版の FFmpeg は含まれません。
+
+  ビルドしたブラウザ版を試すには、以下を実行します。
+
+  ```bash
+  npx vite preview --port 3000 --outDir dist-web
+  ```
 
 - FFmpegのインストール(バイナリファイルを設置するため、インストールしなくてもアプリケーションは動作する)
   - Windowsの場合
