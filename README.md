@@ -28,6 +28,7 @@
 | `src/utils/path.ts`         | ファイルパスから拡張子と入力形式を判定                           |
 | `src/App.css`               | スタイルシート                                                |
 | `src/formats.ts`             | 変換可能なファイル形式、拡張子、MIME typeの定義                 |
+| `src/license-links.ts`        | ライセンスページの生成                          |
 | `src/App.tsx`               | フロントエンドの本体                                          |
 | `src/i18n.tsx`                | 多言語対応の設定                                              |
 | `src-tauri/icons`           | アプリケーションアイコン                                      |
@@ -90,6 +91,7 @@ WASMで利用できる方式を前提に実行指示を作ります。
 | パス                        | 内容                                                          |
 | --------------------------- | ------------------------------------------------------------- |
 | `dist`                      | ビルド成果物の出力先ディレクトリ。`npm run build`で生成される |
+| `dist-web`                   | ブラウザ版のビルド成果物の出力先ディレクトリ。`npm run build:web`で生成される |
 | `node_modules`              | npmの依存パッケージ。`npm install`で生成される                |
 | `src-tauri/binaries`        | FFmpegのバイナリファイル。sidecarで使用されている             |
 | `src-tauri/binaries-lgpl`   | Mac App Store 向けの LGPL 版 FFmpeg のバイナリファイル         |
