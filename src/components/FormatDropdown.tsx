@@ -51,6 +51,10 @@ export function FormatDropdown({
       ja: "JPEGやPNGより高い圧縮効率を持ち、画質を保ちながらファイルサイズを大幅に削減しやすい。透過やHDR、アニメーションにも対応。古いブラウザやレガシーソフトウェアでは非対応の場合がある。JPEGやPNGをWeb向けに軽量化したい場合に適している。",
       en: "Offers higher compression efficiency than JPEG and PNG, making it possible to significantly reduce file sizes while maintaining image quality. Supports transparency, HDR, and animation. May not be supported by older browsers or legacy software. Best suited for reducing JPEG and PNG file sizes for web use.",
     },
+    HEIC: {
+      ja: "高い圧縮効率を持つApple系の画像フォーマット。対応する環境が限られるため、汎用的な共有にはPNGやJPEGへの変換が適している。",
+      en: "An Apple-oriented image format with high compression efficiency. Support is limited, so PNG or JPEG is usually better for broad compatibility.",
+    },
     MP4: {
       ja: "ほぼ全ての端末やブラウザで再生可能な互換性と高い圧縮効率を兼ね備える。コンテナ内のコーデック仕様に依存する。Web配信やSNS投稿、汎用的な動画共有に適している。",
       en: "Combines broad compatibility across almost all devices and browsers with high compression efficiency. Playback depends on internal codec support. Best suited for web streaming, social media, and general video sharing.",

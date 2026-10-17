@@ -10,8 +10,10 @@ lerna-debug.log*
 artifacts
 node_modules
 dist
+dist-web
 dist-ssr
 *.local
+tsconfig.node.tsbuildinfo
 
 # Editor directories and files
 .vscode/*

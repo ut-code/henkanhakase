@@ -1,4 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
+import {
+  cancelBrowserFfmpeg,
+  convertBrowserFile,
+  probeDimensions,
+} from "@browser-ffmpeg";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
@@ -6,15 +11,17 @@ import { copyFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
-import UploadIcon from "./assets/upload.svg";
 import Logo from "./assets/logo.svg";
+import UploadIcon from "./assets/upload.svg";
 import { AudioOptions } from "./components/AudioOptions";
 import { ConversionProgress } from "./components/ConversionProgress";
+import Footer from "./components/Footer.tsx";
 import { FormatDropdown } from "./components/FormatDropdown";
 import { ImageOptions } from "./components/ImageOptions";
 import { MediaModal } from "./components/MediaModal";
 import { MediaPreview } from "./components/MediaPreview";
 import { ResizeOptions } from "./components/ResizeOptions";
+import { TermsOfService } from "./components/TermsOfService";
 import { VideoOptions } from "./components/VideoOptions";
 import {
   AUDIO_FORMATS,
@@ -44,6 +51,7 @@ interface SourceFileItem {
   name: string;
   path: string;
   format: Format;
+  file?: File;
 }
 
 interface ConvertedResultItem {
@@ -57,6 +65,27 @@ interface ConvertedResultItem {
 
 function App() {
   const { locale, setLocale, t } = useTranslation();
+  const [showTerms, setShowTerms] = useState(
+    () => window.location.hash === "#terms",
+  );
+
+  useEffect(() => {
+    const handleHashChange = () =>
+      setShowTerms(window.location.hash === "#terms");
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  const closeTerms = () => {
+    if (window.location.hash === "#terms") {
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}`,
+      );
+    }
+    setShowTerms(false);
+  };
 
   // 複数ファイルを配列で管理
   const [sourceFiles, setSourceFiles] = useState<SourceFileItem[]>([]);
@@ -127,8 +156,11 @@ function App() {
     });
 
   const isVideoOutput = VIDEO_FORMATS.includes(convertedFormat as VideoFormat);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const appendFileSelectionRef = useRef(false);
 
   useEffect(() => {
+    if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
     void listen<{ conversionId: string; progress: number | null }>(
       "conversion-progress",
@@ -141,42 +173,6 @@ function App() {
     });
     return () => unlisten?.();
   }, []);
-
-  // 選択されているファイルの種別（画像・動画・音声）の混在チェック
-  const mediaTypes = useMemo(() => {
-    let hasImage = false;
-    let hasVideo = false;
-    let hasAudio = false;
-    let hasHeic = false;
-
-    for (const file of sourceFiles) {
-      if (file.format === "HEIC") {
-        hasHeic = true;
-        hasImage = true;
-      } else if (
-        file.format === "GIF" ||
-        VIDEO_FORMATS.includes(file.format as VideoFormat)
-      ) {
-        hasVideo = true;
-      } else if (AUDIO_FORMATS.includes(file.format as AudioFormat)) {
-        hasAudio = true;
-      } else {
-        hasImage = true;
-      }
-    }
-
-    return { hasImage, hasVideo, hasAudio, hasHeic };
-  }, [sourceFiles]);
-
-  const isMixedMediaType = useMemo(() => {
-    const activeTypes = [
-      mediaTypes.hasImage,
-      mediaTypes.hasVideo,
-      mediaTypes.hasAudio,
-    ].filter(Boolean).length;
-
-    return activeTypes > 1;
-  }, [mediaTypes]);
 
   // 詳細パネルの開閉ではなく、実際に変換結果へ影響する設定だけを比較する。
   const conversionSettingsKey = JSON.stringify({
@@ -213,24 +209,48 @@ function App() {
 
   // 選択されているすべてのファイルに対応する出力フォーマット候補を出す
   const availableOutputFormats = useMemo<Format[]>(() => {
-    if (sourceFiles.length === 0 || isMixedMediaType) return [];
+    if (sourceFiles.length === 0) return [];
 
-    // HEICが含まれる場合は PNG, JPEG, WebP のみに限定
-    if (mediaTypes.hasHeic) return ["PNG", "JPEG", "WebP"];
+    const getAvailableFormats = (file: SourceFileItem): Format[] => {
+      if (file.format === "HEIC") {
+        return ["PNG", "JPEG", "WebP"];
+      } else if (file.format === "GIF") {
+        return [
+          ...IMAGE_FORMATS.filter((f) => !["HEIC", "ICO"].includes(f)),
+          ...VIDEO_FORMATS,
+        ];
+      } else if (VIDEO_FORMATS.includes(file.format as VideoFormat)) {
+        return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
+      } else if (AUDIO_FORMATS.includes(file.format as AudioFormat)) {
+        return [...AUDIO_FORMATS];
+      } else {
+        return IMAGE_FORMATS.filter((format) => format !== "HEIC");
+      }
+    };
+    // 全てのファイルのavailableFormatsの共通部分を返す
+    return sourceFiles.reduce((acc, file) => {
+      const fileFormats = getAvailableFormats(file);
+      return acc.filter((format) => fileFormats.includes(format));
+    }, getAvailableFormats(sourceFiles[0]));
+  }, [sourceFiles]);
 
-    if (mediaTypes.hasVideo) return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
-    if (mediaTypes.hasAudio) return [...AUDIO_FORMATS];
-
-    return IMAGE_FORMATS.filter((format) => format !== "HEIC");
-  }, [sourceFiles, isMixedMediaType, mediaTypes]);
+  // 全てのファイルに対応する出力フォーマットがない場合
+  const isMixedMediaType = useMemo(() => {
+    if (sourceFiles.length === 0) return false;
+    return availableOutputFormats.length === 0;
+  }, [availableOutputFormats, sourceFiles.length]);
 
   // 古い一時ファイルを破棄するヘルパー
   const cleanupOldTempFiles = useCallback((results: ConvertedResultItem[]) => {
     for (const res of results) {
       if (res.convertedFilePath) {
-        invoke("cleanup_temp_file", { path: res.convertedFilePath }).catch(
-          console.error,
-        );
+        if (isTauri()) {
+          invoke("cleanup_temp_file", { path: res.convertedFilePath }).catch(
+            console.error,
+          );
+        } else if (res.convertedFilePath.startsWith("blob:")) {
+          URL.revokeObjectURL(res.convertedFilePath);
+        }
       }
     }
   }, []);
@@ -247,15 +267,14 @@ function App() {
     const probeId = ++dimensionProbeId.current;
 
     try {
-      const dimensions = await invoke<MediaDimensions>(
-        "probe_media_dimensions",
-        {
-          request: {
-            inputPath: file.path,
-            inputFormat: formatToExtension(file.format),
-          },
-        },
-      );
+      const dimensions = file.file
+        ? await probeDimensions(file.file, file.format)
+        : await invoke<MediaDimensions>("probe_media_dimensions", {
+            request: {
+              inputPath: file.path,
+              inputFormat: formatToExtension(file.format),
+            },
+          });
 
       if (probeId !== dimensionProbeId.current) return;
 
@@ -275,34 +294,39 @@ function App() {
   }, []);
 
   // 選択された複数ファイルパスを一度に受け取り処理する関数
-  const processSelectedFilePaths = useCallback(
-    async (filePaths: string[], append = false) => {
-      if (!filePaths || filePaths.length === 0) return;
+  const processSelectedFiles = useCallback(
+    async (inputs: Array<string | File>, append = false) => {
+      if (!inputs || inputs.length === 0) return;
 
       const validFiles: SourceFileItem[] = [];
       const errors: string[] = [];
 
-      for (const filePath of filePaths) {
-        if (!filePath) continue;
+      for (const input of inputs) {
+        if (!input) continue;
 
-        const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
-        const detectedFormat = detectFormatFromPath(filePath);
+        const isFile = input instanceof File;
+        const fileName = isFile
+          ? input.name
+          : (input.split(/[/\\]/).pop() ?? input);
+        const detectedFormat = detectFormatFromPath(fileName);
 
         if (!detectedFormat) {
           errors.push(
             t("unsupportedFormat", {
-              type: getExtensionFromPath(filePath) || "unknown",
+              type: getExtensionFromPath(fileName) || "unknown",
               formats: SUPPORTED_FORMATS.join(", "),
             }),
           );
           continue;
         }
 
+        const path = isFile ? URL.createObjectURL(input) : input;
         validFiles.push({
-          id: `${filePath}-${Date.now()}-${Math.random()}`,
+          id: `${path}-${Date.now()}-${Math.random()}`,
           name: fileName,
-          path: filePath,
+          path,
           format: detectedFormat,
+          ...(isFile ? { file: input } : {}),
         });
       }
 
@@ -385,6 +409,11 @@ function App() {
   };
 
   const selectFileWithDialog = async (append = false) => {
+    if (!isTauri()) {
+      appendFileSelectionRef.current = append;
+      fileInputRef.current?.click();
+      return;
+    }
     try {
       const selected = await open({
         multiple: true,
@@ -392,9 +421,9 @@ function App() {
       });
 
       if (Array.isArray(selected)) {
-        await processSelectedFilePaths(selected, append);
+        await processSelectedFiles(selected, append);
       } else if (selected && typeof selected === "string") {
-        await processSelectedFilePaths([selected], append);
+        await processSelectedFiles([selected], append);
       }
     } catch (err) {
       console.log(err);
@@ -403,6 +432,7 @@ function App() {
   };
 
   useEffect(() => {
+    if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
 
     const setupDragDrop = async () => {
@@ -410,7 +440,7 @@ function App() {
         if (event.payload.type === "drop") {
           const paths = event.payload.paths;
           if (paths && paths.length > 0) {
-            processSelectedFilePaths(paths, true);
+            processSelectedFiles(paths, true);
           }
         }
       });
@@ -421,7 +451,7 @@ function App() {
     return () => {
       if (unlisten) unlisten();
     };
-  }, [processSelectedFilePaths]);
+  }, [processSelectedFiles]);
 
   const buildConversionOptions = (
     targetFileDimensions?: MediaDimensions | null,
@@ -587,7 +617,12 @@ function App() {
 
   const cancelConversion = async () => {
     try {
-      await invoke("cancel_conversion");
+      if (isTauri()) {
+        await invoke("cancel_conversion");
+      } else {
+        cancelBrowserFfmpeg();
+        setIsConverting(false);
+      }
     } catch (cancelError) {
       console.error(t("cancelFailed"), cancelError);
     }
@@ -620,30 +655,41 @@ function App() {
         let fileDimensions: MediaDimensions | null = null;
         if (!isAudioFormat(convertedFormat) && resizeMode === "individual") {
           try {
-            fileDimensions = await invoke<MediaDimensions>(
-              "probe_media_dimensions",
-              {
-                request: {
-                  inputPath: file.path,
-                  inputFormat: inputExtension,
-                },
-              },
-            );
+            fileDimensions = file.file
+              ? await probeDimensions(file.file, file.format)
+              : await invoke<MediaDimensions>("probe_media_dimensions", {
+                  request: {
+                    inputPath: file.path,
+                    inputFormat: inputExtension,
+                  },
+                });
           } catch (probeErr) {
             console.warn("Probe error for file:", file.name, probeErr);
           }
         }
 
-        const outputTempPath = await invoke<string>("convert_file", {
-          request: {
-            inputPath: file.path,
-            stem,
-            conversionId,
-            inputFormat: inputExtension,
-            outputFormat: extension,
-            options: buildConversionOptions(fileDimensions),
-          },
-        });
+        const outputTempPath = isTauri()
+          ? await invoke<string>("convert_file", {
+              request: {
+                inputPath: file.path,
+                stem,
+                conversionId,
+                inputFormat: inputExtension,
+                outputFormat: extension,
+                options: buildConversionOptions(fileDimensions),
+              },
+            })
+          : URL.createObjectURL(
+              await convertBrowserFile(
+                file.file ??
+                  (() => {
+                    throw new Error("Browser source file is unavailable");
+                  })(),
+                file.format,
+                convertedFormat,
+                buildConversionOptions(fileDimensions),
+              ),
+            );
 
         const sequenceKey = stem;
         const sequence =
@@ -683,10 +729,15 @@ function App() {
     if (!res.convertedFilePath || !res.convertedFileName) return;
 
     try {
-      const savePath = await save({
-        defaultPath: res.convertedFileName,
-      });
+      if (!isTauri()) {
+        const link = document.createElement("a");
+        link.href = res.convertedFilePath;
+        link.download = res.convertedFileName;
+        link.click();
+        return;
+      }
 
+      const savePath = await save({ defaultPath: res.convertedFileName });
       if (savePath && typeof savePath === "string") {
         await copyFile(res.convertedFilePath, savePath);
       }
@@ -701,6 +752,18 @@ function App() {
       (r) => r.convertedFilePath && r.convertedFileName,
     );
     if (validResults.length === 0) return;
+
+    if (!isTauri()) {
+      for (const res of validResults) {
+        if (res.convertedFilePath && res.convertedFileName) {
+          const link = document.createElement("a");
+          link.href = res.convertedFilePath;
+          link.download = res.convertedFileName;
+          link.click();
+        }
+      }
+      return;
+    }
 
     try {
       const selectedDir = await open({
@@ -829,6 +892,10 @@ function App() {
     (r) => r.convertedFilePath,
   ).length;
 
+  if (showTerms) {
+    return <TermsOfService onBack={closeTerms} />;
+  }
+
   return (
     <main
       className="
@@ -855,7 +922,7 @@ function App() {
             font-['Plus_Jakarta_Sans','Noto_Sans_JP',sans-serif]
             text-lg font-bold
             tracking-[-0.3px]
-            text-[#1d2c43]
+            text-[#586cec]
           "
         >
           <img src={Logo} alt="" className="size-10" />
@@ -973,6 +1040,15 @@ function App() {
                 max-[980px]:h-57.5
               "
               onClick={() => selectFileWithDialog(false)}
+              onDragOver={(event) => {
+                if (!isTauri()) event.preventDefault();
+              }}
+              onDrop={(event) => {
+                if (isTauri()) return;
+                event.preventDefault();
+                const files = Array.from(event.dataTransfer.files);
+                void processSelectedFiles(files);
+              }}
             >
               <span
                 className="
@@ -1062,6 +1138,23 @@ function App() {
                 </button>
               </div>
             </div>
+          )}
+
+          {!isTauri() && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                void processSelectedFiles(
+                  files,
+                  appendFileSelectionRef.current,
+                );
+              }}
+            />
           )}
 
           {isMixedMediaType && (
@@ -1508,6 +1601,9 @@ function App() {
           </div>
         )}
       </footer>
+
+      {/* Footer */}
+      <Footer />
 
       {/* Media Modal */}
       <MediaModal
