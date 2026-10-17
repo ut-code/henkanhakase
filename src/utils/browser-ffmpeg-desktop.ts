@@ -1,26 +1,7 @@
 import type { Format, MediaDimensions } from "../formats.ts";
+import type { ConversionOptions } from "./ffmpeg.ts";
 
-export type BrowserConversionOptions = {
-  width?: number;
-  height?: number;
-  antiAliasing?: boolean;
-  compressionLevel?: number;
-  qVJpeg?: number;
-  qVWebp?: number;
-  fps?: number;
-  maxColors?: number;
-  crf?: number;
-  crfVp9?: number;
-  qVAvi?: number;
-  audio?: {
-    bitrate?: string;
-    flacCompressionLevel?: number;
-    vorbisQuality?: number;
-    sampleRate?: number;
-    channels?: number;
-    pcmBitDepth?: 16 | 24 | 32;
-  };
-};
+export type BrowserConversionOptions = ConversionOptions;
 
 export async function loadBrowserFfmpeg(): Promise<never> {
   throw new Error("Browser FFmpeg is unavailable in the desktop build");
@@ -37,9 +18,15 @@ export async function convertBrowserFile(
 
 export function cancelBrowserFfmpeg(): void {}
 
-export async function probeBrowserFile(
+export async function probeDimensions(
   _file: File,
   _format: Format,
 ): Promise<MediaDimensions> {
   throw new Error("Browser file probing is unavailable in the desktop build");
+}
+
+export async function generateThumbnail(_source: string): Promise<Blob> {
+  throw new Error(
+    "Browser thumbnail generation is unavailable in the desktop build",
+  );
 }

@@ -54,37 +54,55 @@
 
 ### ブラウザ版とデスクトップ版の変換処理の対応
 
-`src/utils/` と `src-tauri/src/` は、同じ変換機能を別の実行環境で実装する
-ためのコードですが、ファイル構成や処理内容が完全に同じではありません。
-ブラウザ版はTypeScriptから`@ffmpeg/core`のWASMを実行し、デスクトップ版は
-Rustから同梱したFFmpegの補助実行ファイルを実行します。
+ブラウザ版とデスクトップ版は、同じUIから呼び出されますが、入力データの
+渡し方とFFmpegの実行場所が異なります。
 
-| ブラウザ版 (`src/utils`) | デスクトップ版 (`src-tauri/src/conversion`) | 対応する処理 |
+- **ブラウザ版**: `File`の内容を`@ffmpeg/core`のWASM仮想ファイルシステムへ
+  書き込み、ブラウザ内でFFmpegを実行します。サーバーへのアップロードは行いません。
+- **デスクトップ版**: TauriのRustコマンドへ入力ファイルのパスを渡し、Rustが
+  同梱FFmpegのsidecarを起動します。ファイル本体のバイト列をTypeScriptから
+  Rustへ渡す方式ではありません。
+
+#### 変換処理の対応
+
+| 処理 | ブラウザ版 | デスクトップ版 |
 | --- | --- | --- |
-| `ffmpeg.ts` | `ffmpeg.rs` | 入力形式・出力形式・設定値からFFmpegの実行指示を組み立てる。動画、GIF、音声、サイズ変更などの主要な分岐が対応する |
-| `ffmpeg-command.ts` の`buildProbeArgs`、`parsePngDimensions` | `mod.rs` の`probe_dimensions`、`parse_png_dimensions` | 入力から1枚のPNG画像を作り、そのPNGの情報から幅・高さを取得する |
-| `ffmpeg-command.ts` の`buildThumbnailArgs` | `mod.rs` の`generate_thumbnail` | 動画やGIFからサムネイル画像を作る |
-| `browser-ffmpeg-browser.ts` | `mod.rs` の`convert` | 実際の変換を実行する。ブラウザ版はWASM、デスクトップ版は補助実行ファイルを使う |
-| `browser-ffmpeg-browser.ts` の`probeBrowserFile` | `mod.rs` の`probe_dimensions` | 入力ファイルの幅・高さを取得する。ブラウザ版はImage/Video API、デスクトップ版はFFmpegを使う |
-| `browser-ffmpeg-desktop.ts` | 対応するRust処理なし | デスクトップ版にGPLの`@ffmpeg/core`を取り込まず、ブラウザ用処理が呼ばれた場合は明示的にエラーにする |
-| `error.ts` | `error.rs` | エラーコードを扱う。TypeScript側は画面表示用の文章へ変換し、Rust側はTauriで返せる形にする |
+| UIからの分岐 | `App.tsx`で`isTauri()`が`false`の場合に`convertBrowserFile`を呼ぶ | `App.tsx`で`isTauri()`が`true`の場合に`invoke("convert_file")`を呼ぶ |
+| 入力 | `File.arrayBuffer()`で取得したバイト列 | `ConversionRequest.input_path`のファイルパス |
+| FFmpegの準備 | `loadBrowserFfmpeg`で`@ffmpeg/core`の`ffmpeg-core.js`とWASMをロード | `src-tauri/binaries`または`src-tauri/binaries-lgpl`のsidecarを使用 |
+| FFmpeg引数の組み立て | `src/utils/ffmpeg.ts`の`buildArgs` | `src-tauri/src/conversion/ffmpeg.rs`の`build_args` |
+| 実行 | `FFmpeg.writeFile` → `FFmpeg.exec` → `FFmpeg.readFile` | `conversion::convert` → `sidecar("ffmpeg").args(...).spawn()` |
+| 出力 | WASM仮想ファイルから読み出したバイト列を`Blob`にし、Object URLを作成 | 一時ディレクトリに出力し、生成されたファイルパスを返す |
+| 後始末 | `finally`で入力・出力の仮想ファイルを削除 | `TempFile`が失敗・キャンセル時の一時出力を削除 |
+| キャンセル | `FFmpeg.terminate()`でWASM実行を終了 | sidecarのchild processをkill |
+| 進捗 | 現在は変換完了後に結果を返す | FFmpegの`-progress pipe:1`の出力を読み、Tauriイベントで通知 |
 
-次の処理はデスクトップ版だけに存在し、`src/utils/`には一対一の対応処理がありません。
+ただし、実行環境に固有の差があります。デスクトップ版のRust実装には、
+FFmpegの進捗引数、一時ファイル管理、入力オプションの検証、HEIC専用処理、
+複数サイズICO、LGPL版での`h264_videotoolbox`への切り替えがあります。
+ブラウザ版はWASMのFFmpegが利用できるコーデックを前提に実行し、変換結果を
+メモリ上の`Blob`として扱います。
 
-- `conversion/mod.rs`: 補助実行ファイルの起動、キャンセル、進み具合の通知、一時ファイルの管理
-- `conversion/types.rs`: Rust側の入力形式、変換設定、Tauriから受け取るデータの定義と検証
-- `conversion/heic.rs`: `heif-oxide`を使ったHEICの変換、サイズ取得、サムネイル作成
-- `conversion/progress.rs`: FFmpegの出力を進み具合の割合へ変換
-- `path.ts`: 画面側で必要なファイル名・拡張子の判定であり、Rust側のパス管理とは役割が異なる
-- `dimension.ts`: 画面から受け取ったサイズを整える処理であり、Rust側の`ConversionOptions::validate`とは目的が異なる
+#### メディア情報の取得とサムネイル
 
-また、`ffmpeg.ts`と`ffmpeg.rs`は完全に同じ実装ではありません。Rust側には、
-デスクトップ固有の進み具合通知、複数サイズのICO作成、AVIF/BMPの詳細設定、
-LGPL版でH.264の方式を切り替える処理があります。一方、ブラウザ側は
-WASMで利用できる方式を前提に実行指示を作ります。
+変換前の幅・高さの取得は、変換処理とは別の経路です。
 
-新しい変換形式や設定を追加するときは、両方の実装と、デスクトップGPL版、
-デスクトップLGPL版、ブラウザWASM版のすべてを確認してください。
+| 処理 | ブラウザ版 | デスクトップ版 |
+| --- | --- | --- |
+| 画像のサイズ | `browser-ffmpeg-browser.ts`の`probeDimensions`が`Image` APIで取得 | `conversion/mod.rs`の`probe_dimensions`がFFmpegでPNGを生成し、`parse_png_dimensions`で解析 |
+| 動画のサイズ | `probeDimensions`が`video`要素のメタデータから取得 | `probe_dimensions`がFFmpegでPNGを生成し、PNGのIHDRから解析 |
+| GIF・動画のサムネイル | `generateThumbnail`が動画を`video`要素とCanvasからJPEGとして生成 | `generate_thumbnail`が`ffmpeg-command.ts`と同じ形式の引数で生成 |
+| HEIC | WASM側のFFmpegによる変換経路 | `conversion/heic.rs`の`heif-oxide`と`image`による専用処理 |
+
+`src/utils/ffmpeg-command.ts`には、デスクトップ側のプローブ・サムネイル処理と
+対応するFFmpeg引数、およびPNGサイズ解析のロジックがあります。変換本体の
+引数は`ffmpeg.ts`、デスクトップ版の変換本体は`ffmpeg.rs`が担当します。
+
+デスクトップビルドで`browser-ffmpeg-browser.ts`を誤って使用しないよう、
+`browser-ffmpeg-desktop.ts`はブラウザ用WASM処理の代わりに明示的なエラーを
+返します。新しい形式や設定を追加するときは、`ffmpeg.ts`と`ffmpeg.rs`の
+両方に加え、GPL版・LGPL版・ブラウザ版それぞれのFFmpegで利用可能かを確認
+してください。
 
 ### 非追跡ディレクトリ
 

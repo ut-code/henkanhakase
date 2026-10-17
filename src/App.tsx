@@ -1,7 +1,7 @@
 import {
   cancelBrowserFfmpeg,
   convertBrowserFile,
-  probeBrowserFile,
+  probeDimensions,
 } from "@browser-ffmpeg";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -268,7 +268,7 @@ function App() {
 
     try {
       const dimensions = file.file
-        ? await probeBrowserFile(file.file, file.format)
+        ? await probeDimensions(file.file, file.format)
         : await invoke<MediaDimensions>("probe_media_dimensions", {
             request: {
               inputPath: file.path,
@@ -656,7 +656,7 @@ function App() {
         if (!isAudioFormat(convertedFormat) && resizeMode === "individual") {
           try {
             fileDimensions = file.file
-              ? await probeBrowserFile(file.file, file.format)
+              ? await probeDimensions(file.file, file.format)
               : await invoke<MediaDimensions>("probe_media_dimensions", {
                   request: {
                     inputPath: file.path,
@@ -891,8 +891,6 @@ function App() {
   const successfulConversionsCount = convertedResults.filter(
     (r) => r.convertedFilePath,
   ).length;
-  const desktopReleaseUrl =
-    "https://github.com/ut-code/henkanhakase/releases/latest";
 
   if (showTerms) {
     return <TermsOfService onBack={closeTerms} />;
@@ -1603,60 +1601,6 @@ function App() {
           </div>
         )}
       </footer>
-
-      {/* Download Buttons */}
-      {!isTauri() && (
-        <section
-          className="
-            mx-auto mb-6
-            w-[min(1190px,calc(100%-96px))]
-            rounded-xl
-            border border-[#e2e7f0]
-            bg-white/85
-            px-5.5 py-4
-            max-[980px]:w-[calc(100%-40px)]
-          "
-        >
-          <div className="mb-3">
-            <h2 className="text-sm font-bold text-[#3c4a60]">
-              {t("desktopDownloads")}
-            </h2>
-            <p className="mt-1 text-xs text-[#8e9aab]">
-              {t("desktopDownloadsHint")}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2.5 max-[640px]:grid-cols-1">
-            {[
-              ["downloadWindows", "Windows"],
-              ["downloadMacOS", "macOS"],
-              ["downloadLinux", "Linux"],
-            ].map(([labelKey, platform]) => (
-              <a
-                key={platform}
-                href={desktopReleaseUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="
-                  flex items-center justify-center rounded-[9px]
-                  border border-[#dce3ff]
-                  bg-[#f7f8ff]
-                  px-3 py-2.5
-                  text-xs font-bold text-[#586cec]
-                  transition hover:-translate-y-px hover:bg-[#eef1ff]
-                "
-              >
-                {t(
-                  labelKey as
-                    | "downloadWindows"
-                    | "downloadMacOS"
-                    | "downloadLinux",
-                )}
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* Footer */}
       <Footer />

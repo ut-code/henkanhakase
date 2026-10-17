@@ -1,3 +1,4 @@
+import { generateThumbnail } from "@browser-ffmpeg";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useEffect, useRef, useState } from "react";
@@ -53,21 +54,11 @@ export function MediaPreview({ path, format }: MediaPreviewProps) {
       if (format === "GIF" || IMAGE_FORMATS.includes(format as ImageFormat)) {
         setThumbnailUrl(path);
       } else if (VIDEO_FORMATS.includes(format as VideoFormat)) {
-        const video = document.createElement("video");
-        video.preload = "metadata";
-        video.muted = true;
-        video.src = path;
-        video.onloadeddata = () => {
-          video.currentTime = 0.001;
-        };
-        video.onseeked = () => {
-          if (cancelled) return;
-          const canvas = document.createElement("canvas");
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          canvas.getContext("2d")?.drawImage(video, 0, 0);
-          canvas.toBlob((blob) => blob && show(blob), "image/jpeg");
-        };
+        generateThumbnail(path)
+          .then((blob) => show(blob))
+          .catch((error) => {
+            console.error("サムネイルの生成に失敗しました:", error);
+          });
       }
     } else if (
       format === "GIF" ||
