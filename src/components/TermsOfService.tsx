@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { useTranslation } from "../i18n";
+import { readLicense } from "../license-links";
+import { LicenseViewer } from "./LicenseViewer";
 
 interface TermsOfServiceProps {
   onBack: () => void;
@@ -7,6 +10,7 @@ interface TermsOfServiceProps {
 
 export function TermsOfService({ onBack }: TermsOfServiceProps) {
   const { locale } = useTranslation();
+  const licenseViewer = useLicenseViewer();
 
   if (locale === "en") {
     return <EnglishTermsOfService onBack={onBack} />;
@@ -191,26 +195,31 @@ export function TermsOfService({ onBack }: TermsOfServiceProps) {
               本ソフトウェアのソースコードは、MIT
               Licenseに基づき公開されています。MIT
               Licenseの全文は、プロジェクトの
-              <a
+              <button
+                type="button"
+                onClick={() => {
+                  void licenseViewer.show("LICENSEファイル", "LICENSE");
+                }}
                 className="text-[#586cec] underline"
-                href="https://github.com/ut-code/henkanhakase/blob/main/LICENSE"
-                target="_blank"
-                rel="noreferrer"
               >
                 LICENSEファイル
-              </a>
+              </button>
               を参照してください。
             </li>
             <li>
-              本サービスに含まれるFFmpegその他の第三者ソフトウェアは、本ソフトウェアとは別のライセンスに従います。各ライセンスの詳細は、プロジェクトの
-              <a
+              本サービスに含まれるFFmpegその他の第三者ソフトウェアは、本ソフトウェアとは別のライセンスに従います。適用されるライセンスの詳細は、
+              <button
+                type="button"
+                onClick={() => {
+                  void licenseViewer.show(
+                    "ライセンス情報",
+                    "THIRD_PARTY_LICENSES.txt",
+                  );
+                }}
                 className="text-[#586cec] underline"
-                href="https://github.com/ut-code/henkanhakase/tree/main/src-tauri/licenses"
-                target="_blank"
-                rel="noreferrer"
               >
-                第三者ライセンス一覧
-              </a>
+                ライセンス情報
+              </button>
               を参照してください。
             </li>
             <li>
@@ -228,11 +237,13 @@ export function TermsOfService({ onBack }: TermsOfServiceProps) {
 
         <p className="mt-8 text-right text-xs text-[#8e9aab]">以上</p>
       </article>
+      {licenseViewer.element}
     </main>
   );
 }
 
 function EnglishTermsOfService({ onBack }: TermsOfServiceProps) {
+  const licenseViewer = useLicenseViewer();
   return (
     <main
       lang="en"
@@ -441,28 +452,33 @@ function EnglishTermsOfService({ onBack }: TermsOfServiceProps) {
             <li>
               The source code of the Software is released under the MIT License.
               The full text is available in the project&apos;s{" "}
-              <a
+              <button
+                type="button"
+                onClick={() => {
+                  void licenseViewer.show("LICENSE file", "LICENSE");
+                }}
                 className="text-[#586cec] underline"
-                href="https://github.com/ut-code/henkanhakase/blob/main/LICENSE"
-                target="_blank"
-                rel="noreferrer"
               >
                 LICENSE file
-              </a>
+              </button>
               .
             </li>
             <li>
               FFmpeg and other third-party software included in the Service are
-              subject to separate licenses. Details are available in the
-              project&apos;s{" "}
-              <a
+              subject to separate licenses. The applicable license information
+              is available in the{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  void licenseViewer.show(
+                    "License information",
+                    "THIRD_PARTY_LICENSES.txt",
+                  );
+                }}
                 className="text-[#586cec] underline"
-                href="https://github.com/ut-code/henkanhakase/tree/main/src-tauri/licenses"
-                target="_blank"
-                rel="noreferrer"
               >
-                third-party license list
-              </a>
+                license information
+              </button>
               .
             </li>
             <li>
@@ -483,8 +499,35 @@ function EnglishTermsOfService({ onBack }: TermsOfServiceProps) {
 
         <p className="mt-8 text-right text-xs text-[#8e9aab]">End</p>
       </article>
+      {licenseViewer.element}
     </main>
   );
+}
+
+function useLicenseViewer() {
+  const [license, setLicense] = useState<{
+    title: string;
+    text: string;
+  } | null>(null);
+
+  const show = async (title: string, fileName: string) => {
+    try {
+      setLicense({ title, text: await readLicense(fileName) });
+    } catch (error) {
+      console.error("Failed to load license", error);
+    }
+  };
+
+  return {
+    show,
+    element: license ? (
+      <LicenseViewer
+        title={license.title}
+        text={license.text}
+        onClose={() => setLicense(null)}
+      />
+    ) : null,
+  };
 }
 
 function TermsSection({

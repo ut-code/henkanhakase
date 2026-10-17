@@ -113,6 +113,13 @@ const messages = {
     bestQuality: "最高音質",
     voiceLight: "軽量・音声向き",
     terms: "利用規約",
+    catchPhrase: "ファイル変換、これひとつ！",
+    about: "変換はかせについて",
+    license: "ライセンス",
+    thirdPartyLicenses: "サードパーティライセンス",
+    aboutUtcode: "ut.code(); について",
+    website: "公式サイト",
+    x: "公式Xアカウント",
   },
   en: {
     appName: "Henkan Hakase",
@@ -222,6 +229,13 @@ const messages = {
     bestQuality: "best quality",
     voiceLight: "lightweight for voice",
     terms: "Terms of Service",
+    catchPhrase: "File conversion, all in one!",
+    about: "About Henkan Hakase",
+    license: "License",
+    thirdPartyLicenses: "Third-party licenses",
+    aboutUtcode: "About ut.code();",
+    website: "Official website",
+    x: "Official X account",
   },
 } as const;
 

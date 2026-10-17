@@ -15,6 +15,7 @@ import Logo from "./assets/logo.svg";
 import UploadIcon from "./assets/upload.svg";
 import { AudioOptions } from "./components/AudioOptions";
 import { ConversionProgress } from "./components/ConversionProgress";
+import Footer from "./components/Footer.tsx";
 import { FormatDropdown } from "./components/FormatDropdown";
 import { ImageOptions } from "./components/ImageOptions";
 import { MediaModal } from "./components/MediaModal";
@@ -923,7 +924,7 @@ function App() {
             font-['Plus_Jakarta_Sans','Noto_Sans_JP',sans-serif]
             text-lg font-bold
             tracking-[-0.3px]
-            text-[#1d2c43]
+            text-[#586cec]
           "
         >
           <img src={Logo} alt="" className="size-10" />
@@ -931,9 +932,6 @@ function App() {
         </div>
 
         <div className="flex items-center gap-3 text-xs text-[#8390a3]">
-          <a href="#terms" className="text-[#586cec] hover:underline">
-            {t("terms")}
-          </a>
           <span
             className={[
               "size-1.75 rounded-full bg-[#aeb8c7]",
@@ -1606,6 +1604,7 @@ function App() {
         )}
       </footer>
 
+      {/* Download Buttons */}
       {!isTauri() && (
         <section
           className="
@@ -1658,6 +1657,9 @@ function App() {
           </div>
         </section>
       )}
+
+      {/* Footer */}
+      <Footer />
 
       {/* Media Modal */}
       <MediaModal
