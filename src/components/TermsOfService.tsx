@@ -57,7 +57,7 @@ export function TermsOfService({ onBack }: TermsOfServiceProps) {
         "
       >
         <p className="mb-8 text-right text-xs text-[#8e9aab]">
-          制定日：2026年10月16日
+          制定日：2026年10月17日
         </p>
 
         <p className="mb-6 leading-8">
@@ -113,9 +113,7 @@ export function TermsOfService({ onBack }: TermsOfServiceProps) {
             <li>
               ユーザーコンテンツの内容、バックアップ及び管理は、ユーザー自身の責任で行うものとします。
             </li>
-            <li>
-              運営者は、本サービスの提供に必要な範囲を除き、ユーザーコンテンツを利用する権利を取得しません。
-            </li>
+            <li>運営者は、ユーザーコンテンツを利用する権利を取得しません。</li>
           </ol>
         </TermsSection>
 
@@ -129,12 +127,7 @@ export function TermsOfService({ onBack }: TermsOfServiceProps) {
             <li>
               運営者、他のユーザー又は第三者の著作権、商標権、プライバシーその他の権利又は利益を侵害する行為
             </li>
-            <li>
-              本サービスに過度な負荷をかける行為、又は本サービスの運営を妨害する行為
-            </li>
-            <li>
-              本サービス又は本ソフトウェアの不正な改変、解析、逆コンパイル、逆アセンブル若しくはリバースエンジニアリングを行う行為
-            </li>
+            <li>本サービスの運営を妨害する行為</li>
             <li>
               本サービスを利用して、第三者に迷惑、不利益又は損害を与える行為
             </li>
@@ -150,9 +143,6 @@ export function TermsOfService({ onBack }: TermsOfServiceProps) {
           </p>
           <ol className="list-decimal space-y-2 pl-6">
             <li>本サービスの保守、点検、修理又は仕様変更を行う場合</li>
-            <li>
-              通信回線、サーバー、クラウドサービスその他の設備に障害が生じた場合
-            </li>
             <li>
               天災地変、疫病の蔓延、戦争、暴動その他の不可抗力により提供が困難となった場合
             </li>
@@ -190,9 +180,7 @@ export function TermsOfService({ onBack }: TermsOfServiceProps) {
 
         <TermsSection title="第8条（利用規約の変更）">
           <p>
-            運営者は、必要と判断した場合、法令に反しない範囲で本規約を変更できます。変更後の
-            本規約は、本サービス上での掲示その他の適切な方法により周知した時点から効力を生じる
-            ものとします。変更後にユーザーが本サービスを利用した場合、変更後の本規約に同意した
+            運営者は、必要と判断した場合、法令に反しない範囲で本規約を変更できます。変更後にユーザーが本サービスを利用した場合、変更後の本規約に同意した
             ものとみなします。
           </p>
         </TermsSection>
@@ -292,7 +280,7 @@ function EnglishTermsOfService({ onBack }: TermsOfServiceProps) {
         "
       >
         <p className="mb-8 text-right text-xs text-[#8e9aab]">
-          Effective date: October 16, 2026
+          Effective date: October 17, 2026
         </p>
 
         <p className="mb-6 leading-8">
@@ -360,10 +348,7 @@ function EnglishTermsOfService({ onBack }: TermsOfServiceProps) {
               Users are responsible for the content, backup, and management of
               their User Content.
             </li>
-            <li>
-              The Operator does not acquire any rights to User Content except to
-              the extent necessary to provide the Service.
-            </li>
+            <li>The Operator does not acquire any rights to User Content.</li>
           </ol>
         </TermsSection>
 
@@ -376,14 +361,7 @@ function EnglishTermsOfService({ onBack }: TermsOfServiceProps) {
               Infringing the copyrights, trademarks, privacy, or other rights or
               interests of the Operator, other Users, or third parties
             </li>
-            <li>
-              Imposing excessive load on the Service or interfering with its
-              operation
-            </li>
-            <li>
-              Unauthorized modification, analysis, decompilation, disassembly,
-              or reverse engineering of the Service or Software
-            </li>
+            <li>Interfering with the operation of the Service</li>
             <li>
               Using the Service to cause inconvenience, disadvantage, or damage
               to third parties
@@ -404,10 +382,6 @@ function EnglishTermsOfService({ onBack }: TermsOfServiceProps) {
             <li>
               Maintenance, inspection, repair, or specification changes to the
               Service
-            </li>
-            <li>
-              A failure occurs in communication lines, servers, cloud services,
-              or other equipment
             </li>
             <li>
               Providing the Service becomes difficult due to a natural disaster,
@@ -456,10 +430,9 @@ function EnglishTermsOfService({ onBack }: TermsOfServiceProps) {
         <TermsSection title="Article 8 (Changes to These Terms)">
           <p>
             The Operator may change these Terms when necessary to the extent
-            permitted by law. The revised Terms become effective when announced
-            on the Service or by another appropriate method. If a User uses the
-            Service after the change becomes effective, the User is deemed to
-            have agreed to the revised Terms.
+            permitted by law. If a User uses the Service after the change
+            becomes effective, the User is deemed to have agreed to the revised
+            Terms.
           </p>
         </TermsSection>
 
