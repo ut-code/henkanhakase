@@ -657,37 +657,11 @@ function App() {
 
         // SVGの変換処理分岐
         if (file.format === "SVG") {
-          const targetW = mediaDimensions ? resizeWidth : undefined;
-          const targetH = mediaDimensions ? resizeHeight : undefined;
-
-          // JS側でSVG -> 一時PNGを生成
-          const tempPng = await convertSvgToPngTempFile(
-            file.path,
-            targetW,
-            targetH,
-          );
+          // オプションを適用せず、中間PNGを生成する
+          const tempPng = await convertSvgToPngTempFile(file.path);
           tempPngPathToCleanup = tempPng;
 
-          if (convertedFormat === "PNG") {
-            // 出力形式がPNGの場合は、直接一時PNGを出力として採用する (二重変換回避)
-            const sequenceKey = stem;
-            const sequence =
-              (outputConversionSequences.current.get(sequenceKey) ?? 0) + 1;
-            outputConversionSequences.current.set(sequenceKey, sequence);
-            const outputName = `${stem}_${sequence}.${extension}`;
-
-            newResults.push({
-              id: file.id,
-              sourceName: file.name,
-              convertedFilePath: tempPng,
-              convertedFileName: outputName,
-              convertedFileFormat: convertedFormat,
-              error: null,
-            });
-            continue;
-          }
-
-          // PNG以外の他形式へ変換する場合は生成した一時PNGをFFmpeg処理に渡す
+          // PNGを含むすべての出力形式で、後続のFFmpeg処理を利用する
           inputPathForConversion = tempPng;
           inputFormatForConversion = "png";
         }

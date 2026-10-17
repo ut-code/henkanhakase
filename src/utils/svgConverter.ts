@@ -66,41 +66,15 @@ export function parseSvgDimensions(svgText: string): SvgDimension {
  */
 export async function convertSvgToPngBuffer(
   svgPath: string,
-  targetWidth?: number,
-  targetHeight?: number,
 ): Promise<Uint8Array> {
   await ensureWasmInitialized();
 
   const svgText = await readTextFile(svgPath);
-
-  if (!svgText?.includes("<svg")) {
-    throw new Error("指定されたファイルは有効なSVGではありません。");
-  }
-
+  const resvg = new Resvg(svgText);
   try {
-    let fitToOptions:
-      | { mode: "original" }
-      | { mode: "width"; value: number }
-      | { mode: "height"; value: number }
-      | { mode: "zoom"; value: number } = { mode: "original" };
-
-    if (targetWidth && targetWidth > 0) {
-      fitToOptions = { mode: "width", value: targetWidth };
-    } else if (targetHeight && targetHeight > 0) {
-      fitToOptions = { mode: "height", value: targetHeight };
-    }
-
-    const resvg = new Resvg(svgText, {
-      fitTo: fitToOptions,
-    });
-
-    const pngData = resvg.render();
-    const pngBuffer = pngData.asPng();
+    return resvg.render().asPng();
+  } finally {
     resvg.free();
-
-    return pngBuffer;
-  } catch (err) {
-    throw new Error(`SVGのレンダリングに失敗しました: ${String(err)}`);
   }
 }
 
@@ -109,20 +83,11 @@ export async function convertSvgToPngBuffer(
  */
 export async function convertSvgToPngTempFile(
   svgPath: string,
-  targetWidth?: number,
-  targetHeight?: number,
 ): Promise<string> {
-  const pngBuffer = await convertSvgToPngBuffer(
-    svgPath,
-    targetWidth,
-    targetHeight,
-  );
-
-  // Tauri側のコマンドを呼び出して一時ファイルの出力パスを取得
+  const pngBuffer = await convertSvgToPngBuffer(svgPath);
   const tempPngPath = await invoke<string>("create_temp_file_path", {
     extension: "png",
   });
-
   await writeFile(tempPngPath, pngBuffer);
   return tempPngPath;
 }
