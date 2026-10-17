@@ -2,7 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { copyFile, readTextFile } from "@tauri-apps/plugin-fs";
+import {
+  copyFile,
+  readFile,
+  readTextFile,
+  writeFile,
+} from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArrowIcon from "./assets/arrow.svg";
 import FileIcon from "./assets/file.svg";
@@ -14,6 +19,7 @@ import { FormatDropdown } from "./components/FormatDropdown";
 import { ImageOptions } from "./components/ImageOptions";
 import { MediaModal } from "./components/MediaModal";
 import { MediaPreview } from "./components/MediaPreview";
+import { PdfOptions } from "./components/PdfOptions";
 import { ResizeOptions } from "./components/ResizeOptions";
 import { VideoOptions } from "./components/VideoOptions";
 import {
@@ -38,6 +44,10 @@ import {
 } from "./utils/dimension.ts";
 import { apiErrorMessage } from "./utils/error.ts";
 import { detectFormatFromPath, getExtensionFromPath } from "./utils/path.ts";
+import {
+  createPdfFromPng,
+  type PdfConversionOptions,
+} from "./utils/pdfConverter.ts";
 import {
   convertSvgToPngTempFile,
   parseSvgDimensions,
@@ -114,6 +124,12 @@ function App() {
   const [gifMaxColors, setGifMaxColors] = useState<number>(256);
   const [bmpBitDepth, setBmpBitDepth] = useState<number>(24);
   const [bmpCompression, setBmpCompression] = useState<boolean>(false);
+  const [pdfOptions, setPdfOptions] = useState<PdfConversionOptions>({
+    pageSize: "a4",
+    orientation: "auto",
+    marginMm: 10,
+    fitMode: "contain",
+  });
   const [icoSizes, setIcoSizes] = useState<number[]>([64, 256]);
   const [icoFitMode, setIcoFitMode] = useState<"pad" | "square">("pad");
   const [videoCrf, setVideoCrf] = useState<number>(23);
@@ -204,6 +220,7 @@ function App() {
     gifMaxColors,
     bmpBitDepth,
     bmpCompression,
+    pdfOptions,
     icoSizes,
     icoFitMode,
     videoCrf,
@@ -225,7 +242,12 @@ function App() {
         (format) => format !== "HEIC" && format !== "SVG",
       );
 
-    if (mediaTypes.hasVideo) return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
+    if (mediaTypes.hasVideo) {
+      const gifOnly = sourceFiles.every((file) => file.format === "GIF");
+      return gifOnly
+        ? [...VIDEO_FORMATS, "GIF", "PDF", ...AUDIO_FORMATS]
+        : [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
+    }
     if (mediaTypes.hasAudio) return [...AUDIO_FORMATS];
 
     return IMAGE_FORMATS.filter(
@@ -622,6 +644,7 @@ function App() {
 
     for (const file of sourceFiles) {
       let tempPngPathToCleanup: string | null = null;
+      let tempPdfPathToCleanup: string | null = null;
       try {
         const conversionId = crypto.randomUUID();
         activeConversionId.current = conversionId;
@@ -650,6 +673,56 @@ function App() {
           } catch (probeErr) {
             console.warn("Probe error for file:", file.name, probeErr);
           }
+        }
+
+        // PDF出力では、まずPNGの中間ファイルを作成し、そのPNGをjsPDFでPDF化する
+        if (convertedFormat === "PDF") {
+          if (file.format === "SVG") {
+            // SVGは既存のresvg処理でPNGに変換する
+            tempPngPathToCleanup = await convertSvgToPngTempFile(file.path);
+          } else {
+            // SVG以外は既存のRust/FFmpeg変換処理でPNGに変換する
+            tempPngPathToCleanup = await invoke<string>("convert_file", {
+              request: {
+                inputPath: file.path,
+                stem: `${stem}_pdf_intermediate`,
+                conversionId,
+                inputFormat: inputExtension,
+                outputFormat: "png",
+                options: {},
+              },
+            });
+          }
+
+          const pngBytes = await readFile(tempPngPathToCleanup);
+          const pdfBytes = createPdfFromPng(pngBytes, pdfOptions);
+          tempPdfPathToCleanup = await invoke<string>("create_temp_file_path", {
+            extension: "pdf",
+          });
+          await writeFile(tempPdfPathToCleanup, pdfBytes);
+
+          // PDF生成に成功したので、中間PNGを削除する
+          invoke("cleanup_temp_file", { path: tempPngPathToCleanup }).catch(
+            console.error,
+          );
+          tempPngPathToCleanup = null;
+
+          const sequenceKey = stem;
+          const sequence =
+            (outputConversionSequences.current.get(sequenceKey) ?? 0) + 1;
+          outputConversionSequences.current.set(sequenceKey, sequence);
+          const outputName = `${stem}_${sequence}.pdf`;
+
+          newResults.push({
+            id: file.id,
+            sourceName: file.name,
+            convertedFilePath: tempPdfPathToCleanup,
+            convertedFileName: outputName,
+            convertedFileFormat: "PDF",
+            error: null,
+          });
+          tempPdfPathToCleanup = null;
+          continue;
         }
 
         let inputPathForConversion = file.path;
@@ -701,6 +774,11 @@ function App() {
       } catch (err) {
         if (tempPngPathToCleanup) {
           invoke("cleanup_temp_file", { path: tempPngPathToCleanup }).catch(
+            console.error,
+          );
+        }
+        if (tempPdfPathToCleanup) {
+          invoke("cleanup_temp_file", { path: tempPdfPathToCleanup }).catch(
             console.error,
           );
         }
@@ -1443,40 +1521,43 @@ function App() {
           <div className="border-t border-[#edf0f5] px-5.5 py-4">
             {sourceFiles.length > 0 && !isAudioFormat(convertedFormat) ? (
               <div className="flex flex-col gap-5">
-                {sourceFiles.length > 1 && convertedFormat !== "ICO" && (
-                  <div className="flex flex-col gap-1.5 rounded-lg bg-[#fafbff] p-3 border border-[#e8ecf4]">
-                    <span className="text-xs font-semibold text-[#3c4a60]">
-                      {t("multipleResizeMode")}
-                    </span>
-                    <div className="flex items-center gap-4 text-xs text-[#5b687c]">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="resizeMode"
-                          value="individual"
-                          checked={resizeMode === "individual"}
-                          onChange={() => setResizeMode("individual")}
-                          className="accent-[#586cec]"
-                        />
-                        {t("resizeIndividual")}
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="resizeMode"
-                          value="uniform"
-                          checked={resizeMode === "uniform"}
-                          onChange={() => setResizeMode("uniform")}
-                          className="accent-[#586cec]"
-                        />
-                        {t("resizeUniform")}
-                      </label>
+                {sourceFiles.length > 1 &&
+                  convertedFormat !== "ICO" &&
+                  convertedFormat !== "PDF" && (
+                    <div className="flex flex-col gap-1.5 rounded-lg bg-[#fafbff] p-3 border border-[#e8ecf4]">
+                      <span className="text-xs font-semibold text-[#3c4a60]">
+                        {t("multipleResizeMode")}
+                      </span>
+                      <div className="flex items-center gap-4 text-xs text-[#5b687c]">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="resizeMode"
+                            value="individual"
+                            checked={resizeMode === "individual"}
+                            onChange={() => setResizeMode("individual")}
+                            className="accent-[#586cec]"
+                          />
+                          {t("resizeIndividual")}
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="resizeMode"
+                            value="uniform"
+                            checked={resizeMode === "uniform"}
+                            onChange={() => setResizeMode("uniform")}
+                            className="accent-[#586cec]"
+                          />
+                          {t("resizeUniform")}
+                        </label>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {/* ICO以外で「単一ファイル」または「最初のファイルの縦横比に固定」が選ばれている場合のみ標準リサイズオプションを表示 */}
                 {convertedFormat !== "ICO" &&
+                  convertedFormat !== "PDF" &&
                   (sourceFiles.length <= 1 || resizeMode === "uniform") && (
                     <ResizeOptions
                       dimensions={mediaDimensions}
@@ -1493,11 +1574,13 @@ function App() {
                     />
                   )}
 
-                {convertedFormat !== "ICO" && (
+                {convertedFormat !== "ICO" && convertedFormat !== "PDF" && (
                   <div className="h-px w-full bg-[#edf0f5]" />
                 )}
 
-                {IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ? (
+                {convertedFormat === "PDF" ? (
+                  <PdfOptions options={pdfOptions} onChange={setPdfOptions} />
+                ) : IMAGE_FORMATS.includes(convertedFormat as ImageFormat) ? (
                   <ImageOptions
                     format={convertedFormat as ImageFormat}
                     sourceFormat={sourceFiles[0]?.format ?? null}

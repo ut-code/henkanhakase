@@ -53,7 +53,7 @@ fn create_temp_file_path(extension: String) -> Result<String, String> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     // 使用できる拡張子を制限する
-    if !matches!(extension.as_str(), "png") {
+    if !matches!(extension.as_str(), "png" | "pdf") {
         return Err("Unsupported temporary file extension".to_string());
     }
 
