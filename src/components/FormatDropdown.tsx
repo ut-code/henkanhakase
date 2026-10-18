@@ -52,8 +52,8 @@ export function FormatDropdown({
       en: "Offers higher compression efficiency than JPEG and PNG, making it possible to significantly reduce file sizes while maintaining image quality. Supports transparency, HDR, and animation. May not be supported by older browsers or legacy software. Best suited for reducing JPEG and PNG file sizes for web use.",
     },
     HEIC: {
-      ja: "高効率な圧縮方式により、画質を保ちながらJPEGよりもファイルサイズを小さくしやすい。透過処理や複数画像の格納にも対応するが、対応ソフトウェアや環境が限られる場合がある。高画質と省容量が求められる写真の保存に適している。",
-      en: "Uses highly efficient compression to achieve smaller file sizes than JPEG while maintaining image quality. Supports transparency and storing multiple images, but compatibility may be limited in some software and environments. Best suited for storing photos when high image quality and small file sizes are desired.",
+      ja: "高い圧縮効率を持つApple系の画像フォーマット。対応する環境が限られるため、汎用的な共有にはPNGやJPEGへの変換が適している。",
+      en: "An Apple-oriented image format with high compression efficiency. Support is limited, so PNG or JPEG is usually better for broad compatibility.",
     },
     SVG: {
       ja: "ベクター形式のため拡大・縮小しても画質が劣化せず、図形や文字を鮮明に表示できる。写真など複雑な画像の保存には適さない場合がある。ロゴやアイコン、イラストなど、拡大・縮小や編集が必要な画像に適している。",

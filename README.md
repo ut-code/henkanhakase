@@ -19,11 +19,16 @@
 | `scripts/build-ffmpeg.sh`   | 同梱するFFmpeg(GPL版・LGPL版)のビルドスクリプト               |
 | `src/assets`              | 画像など。importして使える                                            |
 | `src/components`            | Reactのコンポーネント                                          |
-| `src/utils/dimension.ts` | 画像や動画のサイズの正規化                                   |
-| `src/utils/error.ts` | エラーの関数                                                |
-| `src/utils/path.ts` | ファイルパスに関する関数                                                |
+| `src/utils/browser-ffmpeg-browser.ts` | `@ffmpeg/core` WASMの読み込み、ブラウザ上の調査・変換 |
+| `src/utils/browser-ffmpeg-desktop.ts` | デスクトップ版でブラウザ用WASMを誤って呼ばないための代替処理 |
+| `src/utils/dimension.ts`    | 画像や動画のサイズの正規化                                       |
+| `src/utils/error.ts`        | Tauriから返されたエラーコードを画面表示用の文章へ変換           |
+| `src/utils/ffmpeg-command.ts` | サイズ調査・サムネイル作成用のFFmpeg引数とPNGサイズ解析       |
+| `src/utils/ffmpeg.ts`       | ブラウザ版FFmpegに渡す変換指示の組み立て                         |
+| `src/utils/path.ts`         | ファイルパスから拡張子と入力形式を判定                           |
 | `src/App.css`               | スタイルシート                                                |
-| `src/formats.tsx`            | 変換可能なファイル形式の定義                                    |
+| `src/formats.ts`             | 変換可能なファイル形式、拡張子、MIME typeの定義                 |
+| `src/license-links.ts`        | ライセンスページの生成                          |
 | `src/App.tsx`               | フロントエンドの本体                                          |
 | `src/i18n.tsx`                | 多言語対応の設定                                              |
 | `src-tauri/icons`           | アプリケーションアイコン                                      |
@@ -48,11 +53,64 @@
 | `LICENSE`                   | ライセンス(MIT)                                               |
 | `README.md`                 | この文章                                                      |
 
+### ブラウザ版とデスクトップ版の変換処理の対応
+
+ブラウザ版とデスクトップ版は、同じUIから呼び出されますが、入力データの
+渡し方とFFmpegの実行場所が異なります。
+
+- **ブラウザ版**: `File`の内容を`@ffmpeg/core`のWASM仮想ファイルシステムへ
+  書き込み、ブラウザ内でFFmpegを実行します。サーバーへのアップロードは行いません。
+- **デスクトップ版**: TauriのRustコマンドへ入力ファイルのパスを渡し、Rustが
+  同梱FFmpegのsidecarを起動します。ファイル本体のバイト列をTypeScriptから
+  Rustへ渡す方式ではありません。
+
+#### 変換処理の対応
+
+| 処理 | ブラウザ版 | デスクトップ版 |
+| --- | --- | --- |
+| UIからの分岐 | `App.tsx`で`isTauri()`が`false`の場合に`convertBrowserFile`を呼ぶ | `App.tsx`で`isTauri()`が`true`の場合に`invoke("convert_file")`を呼ぶ |
+| 入力 | `File.arrayBuffer()`で取得したバイト列 | `ConversionRequest.input_path`のファイルパス |
+| FFmpegの準備 | `loadBrowserFfmpeg`で`@ffmpeg/core`の`ffmpeg-core.js`とWASMをロード | `src-tauri/binaries`または`src-tauri/binaries-lgpl`のsidecarを使用 |
+| FFmpeg引数の組み立て | `src/utils/ffmpeg.ts`の`buildArgs` | `src-tauri/src/conversion/ffmpeg.rs`の`build_args` |
+| 実行 | `FFmpeg.writeFile` → `FFmpeg.exec` → `FFmpeg.readFile` | `conversion::convert` → `sidecar("ffmpeg").args(...).spawn()` |
+| 出力 | WASM仮想ファイルから読み出したバイト列を`Blob`にし、Object URLを作成 | 一時ディレクトリに出力し、生成されたファイルパスを返す |
+| 後始末 | `finally`で入力・出力の仮想ファイルを削除 | `TempFile`が失敗・キャンセル時の一時出力を削除 |
+| キャンセル | `FFmpeg.terminate()`でWASM実行を終了 | sidecarのchild processをkill |
+| 進捗 | 現在は変換完了後に結果を返す | FFmpegの`-progress pipe:1`の出力を読み、Tauriイベントで通知 |
+
+ただし、実行環境に固有の差があります。デスクトップ版のRust実装には、
+FFmpegの進捗引数、一時ファイル管理、入力オプションの検証、HEIC専用処理、
+複数サイズICO、LGPL版での`h264_videotoolbox`への切り替えがあります。
+ブラウザ版はWASMのFFmpegが利用できるコーデックを前提に実行し、変換結果を
+メモリ上の`Blob`として扱います。
+
+#### メディア情報の取得とサムネイル
+
+変換前の幅・高さの取得は、変換処理とは別の経路です。
+
+| 処理 | ブラウザ版 | デスクトップ版 |
+| --- | --- | --- |
+| 画像のサイズ | `browser-ffmpeg-browser.ts`の`probeDimensions`が`Image` APIで取得 | `conversion/mod.rs`の`probe_dimensions`がFFmpegでPNGを生成し、`parse_png_dimensions`で解析 |
+| 動画のサイズ | `probeDimensions`が`video`要素のメタデータから取得 | `probe_dimensions`がFFmpegでPNGを生成し、PNGのIHDRから解析 |
+| GIF・動画のサムネイル | `generateThumbnail`が動画を`video`要素とCanvasからJPEGとして生成 | `generate_thumbnail`が`ffmpeg-command.ts`と同じ形式の引数で生成 |
+| HEIC | WASM側のFFmpegによる変換経路 | `conversion/heic.rs`の`heif-oxide`と`image`による専用処理 |
+
+`src/utils/ffmpeg-command.ts`には、デスクトップ側のプローブ・サムネイル処理と
+対応するFFmpeg引数、およびPNGサイズ解析のロジックがあります。変換本体の
+引数は`ffmpeg.ts`、デスクトップ版の変換本体は`ffmpeg.rs`が担当します。
+
+デスクトップビルドで`browser-ffmpeg-browser.ts`を誤って使用しないよう、
+`browser-ffmpeg-desktop.ts`はブラウザ用WASM処理の代わりに明示的なエラーを
+返します。新しい形式や設定を追加するときは、`ffmpeg.ts`と`ffmpeg.rs`の
+両方に加え、GPL版・LGPL版・ブラウザ版それぞれのFFmpegで利用可能かを確認
+してください。
+
 ### 非追跡ディレクトリ
 
 | パス                        | 内容                                                          |
 | --------------------------- | ------------------------------------------------------------- |
 | `dist`                      | ビルド成果物の出力先ディレクトリ。`npm run build`で生成される |
+| `dist-web`                   | ブラウザ版のビルド成果物の出力先ディレクトリ。`npm run build:web`で生成される |
 | `node_modules`              | npmの依存パッケージ。`npm install`で生成される                |
 | `src-tauri/binaries`        | FFmpegのバイナリファイル。sidecarで使用されている             |
 | `src-tauri/binaries-lgpl`   | Mac App Store 向けの LGPL 版 FFmpeg のバイナリファイル         |
@@ -150,6 +208,22 @@ brew install pkg-config cmake nasm
    ```bash
    npm run tauri:build:lgpl
    ```
+
+- ブラウザ版をビルド
+
+  ```bash
+  npm run build:web
+  ```
+
+  ブラウザ版は `dist-web` に出力され、`@ffmpeg/core` の WebAssembly
+  ファイルを使用します。通常の `npm run build` および Tauri のビルドは
+  `dist` に出力され、ブラウザ版の FFmpeg は含まれません。
+
+  ビルドしたブラウザ版を試すには、以下を実行します。
+
+  ```bash
+  npx vite preview --port 3000 --outDir dist-web
+  ```
 
 - FFmpegのインストール(バイナリファイルを設置するため、インストールしなくてもアプリケーションは動作する)
   - Windowsの場合

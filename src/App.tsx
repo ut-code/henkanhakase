@@ -1,3 +1,8 @@
+import {
+  cancelBrowserFfmpeg,
+  convertBrowserFile,
+  probeDimensions,
+} from "@browser-ffmpeg";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -15,12 +20,14 @@ import Logo from "./assets/logo.svg";
 import UploadIcon from "./assets/upload.svg";
 import { AudioOptions } from "./components/AudioOptions";
 import { ConversionProgress } from "./components/ConversionProgress";
+import Footer from "./components/Footer.tsx";
 import { FormatDropdown } from "./components/FormatDropdown";
 import { ImageOptions } from "./components/ImageOptions";
 import { MediaModal } from "./components/MediaModal";
 import { MediaPreview } from "./components/MediaPreview";
 import { PdfOptions } from "./components/PdfOptions";
 import { ResizeOptions } from "./components/ResizeOptions";
+import { TermsOfService } from "./components/TermsOfService";
 import { VideoOptions } from "./components/VideoOptions";
 import { WebDownloadGuide } from "./components/WebDownloadGuide";
 import {
@@ -59,6 +66,7 @@ interface SourceFileItem {
   name: string;
   path: string;
   format: Format;
+  file?: File;
 }
 
 interface ConvertedResultItem {
@@ -72,6 +80,27 @@ interface ConvertedResultItem {
 
 function App() {
   const { locale, setLocale, t } = useTranslation();
+  const [showTerms, setShowTerms] = useState(
+    () => window.location.hash === "#terms",
+  );
+
+  useEffect(() => {
+    const handleHashChange = () =>
+      setShowTerms(window.location.hash === "#terms");
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  const closeTerms = () => {
+    if (window.location.hash === "#terms") {
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}`,
+      );
+    }
+    setShowTerms(false);
+  };
 
   // 複数ファイルを配列で管理
   const [sourceFiles, setSourceFiles] = useState<SourceFileItem[]>([]);
@@ -148,8 +177,11 @@ function App() {
     });
 
   const isVideoOutput = VIDEO_FORMATS.includes(convertedFormat as VideoFormat);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const appendFileSelectionRef = useRef(false);
 
   useEffect(() => {
+    if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
     void listen<{ conversionId: string; progress: number | null }>(
       "conversion-progress",
@@ -162,42 +194,6 @@ function App() {
     });
     return () => unlisten?.();
   }, []);
-
-  // 選択されているファイルの種別（画像・動画・音声）の混在チェック
-  const mediaTypes = useMemo(() => {
-    let hasImage = false;
-    let hasVideo = false;
-    let hasAudio = false;
-    let hasHeic = false;
-
-    for (const file of sourceFiles) {
-      if (file.format === "HEIC") {
-        hasHeic = true;
-        hasImage = true;
-      } else if (
-        file.format === "GIF" ||
-        VIDEO_FORMATS.includes(file.format as VideoFormat)
-      ) {
-        hasVideo = true;
-      } else if (AUDIO_FORMATS.includes(file.format as AudioFormat)) {
-        hasAudio = true;
-      } else {
-        hasImage = true;
-      }
-    }
-
-    return { hasImage, hasVideo, hasAudio, hasHeic };
-  }, [sourceFiles]);
-
-  const isMixedMediaType = useMemo(() => {
-    const activeTypes = [
-      mediaTypes.hasImage,
-      mediaTypes.hasVideo,
-      mediaTypes.hasAudio,
-    ].filter(Boolean).length;
-
-    return activeTypes > 1;
-  }, [mediaTypes]);
 
   // 詳細パネルの開閉ではなく、実際に変換結果へ影響する設定だけを比較する。
   const conversionSettingsKey = JSON.stringify({
@@ -235,34 +231,50 @@ function App() {
 
   // 選択されているすべてのファイルに対応する出力フォーマット候補を出す
   const availableOutputFormats = useMemo<Format[]>(() => {
-    if (sourceFiles.length === 0 || isMixedMediaType) return [];
+    if (sourceFiles.length === 0) return [];
 
-    // HEICが含まれる場合は 画像フォーマット全般（HEIC以外）を選択可能にする
-    if (mediaTypes.hasHeic)
-      return IMAGE_FORMATS.filter(
-        (format) => format !== "HEIC" && format !== "SVG",
-      );
+    const getAvailableFormats = (file: SourceFileItem): Format[] => {
+      if (file.format === "HEIC") {
+        return [...IMAGE_FORMATS.filter((f) => !["HEIC", "SVG"].includes(f))];
+      } else if (file.format === "GIF") {
+        return [
+          ...IMAGE_FORMATS.filter((f) => !["HEIC", "ICO", "SVG"].includes(f)),
+          ...VIDEO_FORMATS,
+        ];
+      } else if (VIDEO_FORMATS.includes(file.format as VideoFormat)) {
+        return [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
+      } else if (AUDIO_FORMATS.includes(file.format as AudioFormat)) {
+        return [...AUDIO_FORMATS];
+      } else {
+        return IMAGE_FORMATS.filter(
+          (format) => !["HEIC", "SVG"].includes(format),
+        );
+      }
+    };
+    // 全てのファイルのavailableFormatsの共通部分を返す
+    return sourceFiles.reduce((acc, file) => {
+      const fileFormats = getAvailableFormats(file);
+      return acc.filter((format) => fileFormats.includes(format));
+    }, getAvailableFormats(sourceFiles[0]));
+  }, [sourceFiles]);
 
-    if (mediaTypes.hasVideo) {
-      const gifOnly = sourceFiles.every((file) => file.format === "GIF");
-      return gifOnly
-        ? [...VIDEO_FORMATS, "GIF", "PDF", ...AUDIO_FORMATS]
-        : [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
-    }
-    if (mediaTypes.hasAudio) return [...AUDIO_FORMATS];
-
-    return IMAGE_FORMATS.filter(
-      (format) => format !== "HEIC" && format !== "SVG",
-    );
-  }, [sourceFiles, isMixedMediaType, mediaTypes]);
+  // 全てのファイルに対応する出力フォーマットがない場合
+  const isMixedMediaType = useMemo(() => {
+    if (sourceFiles.length === 0) return false;
+    return availableOutputFormats.length === 0;
+  }, [availableOutputFormats, sourceFiles.length]);
 
   // 古い一時ファイルを破棄するヘルパー
   const cleanupOldTempFiles = useCallback((results: ConvertedResultItem[]) => {
     for (const res of results) {
       if (res.convertedFilePath) {
-        invoke("cleanup_temp_file", { path: res.convertedFilePath }).catch(
-          console.error,
-        );
+        if (isTauri()) {
+          invoke("cleanup_temp_file", { path: res.convertedFilePath }).catch(
+            console.error,
+          );
+        } else if (res.convertedFilePath.startsWith("blob:")) {
+          URL.revokeObjectURL(res.convertedFilePath);
+        }
       }
     }
   }, []);
@@ -280,9 +292,12 @@ function App() {
 
     try {
       let dimensions: MediaDimensions;
+
       if (file.format === "SVG") {
         const svgText = await readTextFile(file.path);
         dimensions = parseSvgDimensions(svgText);
+      } else if (file.file) {
+        dimensions = await probeDimensions(file.file, file.format);
       } else {
         dimensions = await invoke<MediaDimensions>("probe_media_dimensions", {
           request: {
@@ -310,34 +325,39 @@ function App() {
   }, []);
 
   // 選択された複数ファイルパスを一度に受け取り処理する関数
-  const processSelectedFilePaths = useCallback(
-    async (filePaths: string[], append = false) => {
-      if (!filePaths || filePaths.length === 0) return;
+  const processSelectedFiles = useCallback(
+    async (inputs: Array<string | File>, append = false) => {
+      if (!inputs || inputs.length === 0) return;
 
       const validFiles: SourceFileItem[] = [];
       const errors: string[] = [];
 
-      for (const filePath of filePaths) {
-        if (!filePath) continue;
+      for (const input of inputs) {
+        if (!input) continue;
 
-        const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
-        const detectedFormat = detectFormatFromPath(filePath);
+        const isFile = input instanceof File;
+        const fileName = isFile
+          ? input.name
+          : (input.split(/[/\\]/).pop() ?? input);
+        const detectedFormat = detectFormatFromPath(fileName);
 
         if (!detectedFormat) {
           errors.push(
             t("unsupportedFormat", {
-              type: getExtensionFromPath(filePath) || "unknown",
+              type: getExtensionFromPath(fileName) || "unknown",
               formats: SUPPORTED_FORMATS.join(", "),
             }),
           );
           continue;
         }
 
+        const path = isFile ? URL.createObjectURL(input) : input;
         validFiles.push({
-          id: `${filePath}-${Date.now()}-${Math.random()}`,
+          id: `${path}-${Date.now()}-${Math.random()}`,
           name: fileName,
-          path: filePath,
+          path,
           format: detectedFormat,
+          ...(isFile ? { file: input } : {}),
         });
       }
 
@@ -420,6 +440,11 @@ function App() {
   };
 
   const selectFileWithDialog = async (append = false) => {
+    if (!isTauri()) {
+      appendFileSelectionRef.current = append;
+      fileInputRef.current?.click();
+      return;
+    }
     try {
       const selected = await open({
         multiple: true,
@@ -427,9 +452,9 @@ function App() {
       });
 
       if (Array.isArray(selected)) {
-        await processSelectedFilePaths(selected, append);
+        await processSelectedFiles(selected, append);
       } else if (selected && typeof selected === "string") {
-        await processSelectedFilePaths([selected], append);
+        await processSelectedFiles([selected], append);
       }
     } catch (err) {
       console.log(err);
@@ -438,6 +463,7 @@ function App() {
   };
 
   useEffect(() => {
+    if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
 
     const setupDragDrop = async () => {
@@ -445,7 +471,7 @@ function App() {
         if (event.payload.type === "drop") {
           const paths = event.payload.paths;
           if (paths && paths.length > 0) {
-            processSelectedFilePaths(paths, true);
+            processSelectedFiles(paths, true);
           }
         }
       });
@@ -456,7 +482,7 @@ function App() {
     return () => {
       if (unlisten) unlisten();
     };
-  }, [processSelectedFilePaths]);
+  }, [processSelectedFiles]);
 
   const buildConversionOptions = (
     targetFileDimensions?: MediaDimensions | null,
@@ -622,7 +648,12 @@ function App() {
 
   const cancelConversion = async () => {
     try {
-      await invoke("cancel_conversion");
+      if (isTauri()) {
+        await invoke("cancel_conversion");
+      } else {
+        cancelBrowserFfmpeg();
+        setIsConverting(false);
+      }
     } catch (cancelError) {
       console.error(t("cancelFailed"), cancelError);
     }
@@ -660,6 +691,8 @@ function App() {
             if (file.format === "SVG") {
               const svgText = await readTextFile(file.path);
               fileDimensions = parseSvgDimensions(svgText);
+            } else if (file.file) {
+              fileDimensions = await probeDimensions(file.file, file.format);
             } else {
               fileDimensions = await invoke<MediaDimensions>(
                 "probe_media_dimensions",
@@ -676,80 +709,154 @@ function App() {
           }
         }
 
-        // PDF出力では、まずPNGの中間ファイルを作成し、そのPNGをjsPDFでPDF化する
+        let outputTempPath: string;
+
         if (convertedFormat === "PDF") {
-          if (file.format === "SVG") {
-            // SVGは既存のresvg処理でPNGに変換する
-            tempPngPathToCleanup = await convertSvgToPngTempFile(file.path);
+          let pngBytes: Uint8Array;
+
+          if (isTauri()) {
+            // Tauri版：SVGは専用処理、それ以外は既存の変換処理でPNG化
+            if (file.format === "SVG") {
+              tempPngPathToCleanup = await convertSvgToPngTempFile(file.path);
+            } else {
+              tempPngPathToCleanup = await invoke<string>("convert_file", {
+                request: {
+                  inputPath: file.path,
+                  stem: `${stem}_pdf_intermediate`,
+                  conversionId,
+                  inputFormat: inputExtension,
+                  outputFormat: "png",
+                  options: {},
+                },
+              });
+            }
+
+            pngBytes = await readFile(tempPngPathToCleanup);
           } else {
-            // SVG以外は既存のRust/FFmpeg変換処理でPNGに変換する
-            tempPngPathToCleanup = await invoke<string>("convert_file", {
-              request: {
-                inputPath: file.path,
-                stem: `${stem}_pdf_intermediate`,
-                conversionId,
-                inputFormat: inputExtension,
-                outputFormat: "png",
-                options: {},
-              },
-            });
+            const sourceFile = file.file;
+            if (!sourceFile) {
+              throw new Error("Browser source file is unavailable");
+            }
+
+            // ブラウザ版：SVGはCanvasでPNG化し、それ以外は既存処理を使う
+            if (file.format === "SVG") {
+              const sourceUrl = URL.createObjectURL(sourceFile);
+
+              try {
+                const image = new Image();
+                image.src = sourceUrl;
+                await image.decode();
+
+                const canvas = document.createElement("canvas");
+                canvas.width = image.naturalWidth;
+                canvas.height = image.naturalHeight;
+
+                const context = canvas.getContext("2d");
+                if (!context) {
+                  throw new Error("Canvas context is unavailable");
+                }
+
+                context.drawImage(image, 0, 0);
+
+                const pngBlob = await new Promise<Blob>((resolve, reject) => {
+                  canvas.toBlob((blob) => {
+                    if (blob) resolve(blob);
+                    else reject(new Error("Failed to create PNG"));
+                  }, "image/png");
+                });
+
+                pngBytes = new Uint8Array(await pngBlob.arrayBuffer());
+              } finally {
+                URL.revokeObjectURL(sourceUrl);
+              }
+            } else {
+              const pngBlob = await convertBrowserFile(
+                sourceFile,
+                file.format,
+                "PNG",
+                {},
+              );
+              pngBytes = new Uint8Array(await pngBlob.arrayBuffer());
+            }
           }
 
-          const pngBytes = await readFile(tempPngPathToCleanup);
           const pdfBytes = createPdfFromPng(pngBytes, pdfOptions);
-          tempPdfPathToCleanup = await invoke<string>("create_temp_file_path", {
-            extension: "pdf",
-          });
-          await writeFile(tempPdfPathToCleanup, pdfBytes);
 
-          // PDF生成に成功したので、中間PNGを削除する
-          invoke("cleanup_temp_file", { path: tempPngPathToCleanup }).catch(
-            console.error,
-          );
-          tempPngPathToCleanup = null;
+          if (isTauri()) {
+            tempPdfPathToCleanup = await invoke<string>(
+              "create_temp_file_path",
+              { extension: "pdf" },
+            );
+            await writeFile(tempPdfPathToCleanup, pdfBytes);
+            outputTempPath = tempPdfPathToCleanup;
+
+            if (tempPngPathToCleanup) {
+              await invoke("cleanup_temp_file", {
+                path: tempPngPathToCleanup,
+              });
+              tempPngPathToCleanup = null;
+            }
+
+            // 正常に生成したPDFは共通のエラー処理で削除しない
+            tempPdfPathToCleanup = null;
+          } else {
+            const pdfBuffer = new ArrayBuffer(pdfBytes.byteLength);
+            new Uint8Array(pdfBuffer).set(pdfBytes);
+
+            outputTempPath = URL.createObjectURL(
+              new Blob([pdfBuffer], { type: "application/pdf" }),
+            );
+          }
 
           const sequenceKey = stem;
           const sequence =
             (outputConversionSequences.current.get(sequenceKey) ?? 0) + 1;
           outputConversionSequences.current.set(sequenceKey, sequence);
-          const outputName = `${stem}_${sequence}.pdf`;
 
           newResults.push({
             id: file.id,
             sourceName: file.name,
-            convertedFilePath: tempPdfPathToCleanup,
-            convertedFileName: outputName,
+            convertedFilePath: outputTempPath,
+            convertedFileName: `${stem}_${sequence}.pdf`,
             convertedFileFormat: "PDF",
             error: null,
           });
-          tempPdfPathToCleanup = null;
+
           continue;
         }
 
         let inputPathForConversion = file.path;
         let inputFormatForConversion = inputExtension;
 
-        // SVGの変換処理分岐
-        if (file.format === "SVG") {
-          // オプションを適用せず、中間PNGを生成する
-          const tempPng = await convertSvgToPngTempFile(file.path);
-          tempPngPathToCleanup = tempPng;
-
-          // PNGを含むすべての出力形式で、後続のFFmpeg処理を利用する
-          inputPathForConversion = tempPng;
+        // Tauri版ではSVGを中間PNGに変換してから後続処理へ渡す
+        if (isTauri() && file.format === "SVG") {
+          tempPngPathToCleanup = await convertSvgToPngTempFile(file.path);
+          inputPathForConversion = tempPngPathToCleanup;
           inputFormatForConversion = "png";
         }
 
-        const outputTempPath = await invoke<string>("convert_file", {
-          request: {
-            inputPath: inputPathForConversion,
-            stem,
-            conversionId,
-            inputFormat: inputFormatForConversion,
-            outputFormat: extension,
-            options: buildConversionOptions(fileDimensions),
-          },
-        });
+        outputTempPath = isTauri()
+          ? await invoke<string>("convert_file", {
+              request: {
+                inputPath: inputPathForConversion,
+                stem,
+                conversionId,
+                inputFormat: inputFormatForConversion,
+                outputFormat: extension,
+                options: buildConversionOptions(fileDimensions),
+              },
+            })
+          : URL.createObjectURL(
+              await convertBrowserFile(
+                file.file ??
+                  (() => {
+                    throw new Error("Browser source file is unavailable");
+                  })(),
+                file.format,
+                convertedFormat,
+                buildConversionOptions(fileDimensions),
+              ),
+            );
 
         // SVGから他形式への変換で使用した一時PNGの削除処理
         if (tempPngPathToCleanup) {
@@ -806,10 +913,15 @@ function App() {
     if (!res.convertedFilePath || !res.convertedFileName) return;
 
     try {
-      const savePath = await save({
-        defaultPath: res.convertedFileName,
-      });
+      if (!isTauri()) {
+        const link = document.createElement("a");
+        link.href = res.convertedFilePath;
+        link.download = res.convertedFileName;
+        link.click();
+        return;
+      }
 
+      const savePath = await save({ defaultPath: res.convertedFileName });
       if (savePath && typeof savePath === "string") {
         await copyFile(res.convertedFilePath, savePath);
       }
@@ -824,6 +936,18 @@ function App() {
       (r) => r.convertedFilePath && r.convertedFileName,
     );
     if (validResults.length === 0) return;
+
+    if (!isTauri()) {
+      for (const res of validResults) {
+        if (res.convertedFilePath && res.convertedFileName) {
+          const link = document.createElement("a");
+          link.href = res.convertedFilePath;
+          link.download = res.convertedFileName;
+          link.click();
+        }
+      }
+      return;
+    }
 
     try {
       const selectedDir = await open({
@@ -951,6 +1075,10 @@ function App() {
   const successfulConversionsCount = convertedResults.filter(
     (r) => r.convertedFilePath,
   ).length;
+
+  if (showTerms) {
+    return <TermsOfService onBack={closeTerms} />;
+  }
 
   return (
     <main
@@ -1085,6 +1213,15 @@ function App() {
                 max-[980px]:h-57.5
               "
               onClick={() => selectFileWithDialog(false)}
+              onDragOver={(event) => {
+                if (!isTauri()) event.preventDefault();
+              }}
+              onDrop={(event) => {
+                if (isTauri()) return;
+                event.preventDefault();
+                const files = Array.from(event.dataTransfer.files);
+                void processSelectedFiles(files);
+              }}
             >
               <span
                 className="
@@ -1174,6 +1311,23 @@ function App() {
                 </button>
               </div>
             </div>
+          )}
+
+          {!isTauri() && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                void processSelectedFiles(
+                  files,
+                  appendFileSelectionRef.current,
+                );
+              }}
+            />
           )}
 
           {isMixedMediaType && (
@@ -1626,6 +1780,8 @@ function App() {
         )}
       </footer>
 
+      {/* Footer */}
+      <Footer />
       {!isTauri() && <WebDownloadGuide locale={locale} />}
 
       {/* Media Modal */}

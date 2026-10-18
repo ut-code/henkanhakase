@@ -7,11 +7,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:web": "tsc && vite build --mode browser",
     "check": "biome check --write",
     "licenses": "cd src-tauri && cargo about generate about.hbs -o licenses/THIRD_PARTY_LICENSES_RUST.txt",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:build:lgpl": "tauri build --features lgpl-ffmpeg --config src-tauri/tauri.lgpl.conf.json"
+    "tauri:build:lgpl": "VITE_FFMPEG_LICENSE=lgpl tauri build --features lgpl-ffmpeg --config src-tauri/tauri.lgpl.conf.json"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",
@@ -33,6 +34,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.9",
     "@tauri-apps/cli": "^2",
+    "@types/node": "^26.6.5",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",

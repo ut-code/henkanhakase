@@ -1,5 +1,10 @@
+import {
+  AUDIO_FORMATS,
+  IMAGE_FORMATS,
+  SUPPORTED_FORMATS,
+  VIDEO_FORMATS,
+} from "../formats";
 import type { Locale } from "../i18n";
-import { AUDIO_FORMATS, IMAGE_FORMATS, SUPPORTED_FORMATS, VIDEO_FORMATS } from "../formats";
 
 const copy = {
   ja: {
@@ -9,15 +14,25 @@ const copy = {
       "変換はかせは、画像・動画・音声の形式を手軽に変換できるアプリです。複数のファイルをまとめて選ぶことや、出力形式や画質などを調整することも可能です。",
     benefitsTitle: "変換はかせでできること",
     benefits: [
-      { title: "形式をまとめて扱う", description: "画像・動画・音声を、ひとつのアプリで簡単に変換できます。" },
-      { title: "複数ファイルを一度に", description: "同じ種類のファイルをまとめて選び、一括で変換できます。" },
-      { title: "仕上がりを調整", description: "形式に応じてサイズや画質、音質などを細かく設定できます。" },
+      {
+        title: "形式をまとめて扱う",
+        description: "画像・動画・音声を、ひとつのアプリで簡単に変換できます。",
+      },
+      {
+        title: "複数ファイルを一度に",
+        description: "同じ種類のファイルをまとめて選び、一括で変換できます。",
+      },
+      {
+        title: "仕上がりを調整",
+        description: "形式に応じてサイズや画質、音質などを細かく設定できます。",
+      },
     ],
     formatsTitle: "対応ファイル形式",
     formatsDescription: "画像・動画・音声の形式に対応しています。",
     formatsCountLabel: "形式",
     formatGroups: ["画像", "動画", "音声"],
-    formatsNote: "選べる出力形式や設定は、入力ファイルの種類によって異なります。",
+    formatsNote:
+      "選べる出力形式や設定は、入力ファイルの種類によって異なります。",
     downloadTitle: "デスクトップ版を使う",
     downloadDescription:
       "お使いの OS に対応するデスクトップ版を、GitHub のリリースページから入手できます。",
@@ -30,15 +45,26 @@ const copy = {
       "Henkan Hakase converts image, video, and audio formats. Select multiple files and adjust the output format, quality, and size.",
     benefitsTitle: "What you can do",
     benefits: [
-      { title: "One place for your files", description: "Convert images, video, and audio in one app." },
-      { title: "Work with multiple files", description: "Select files of the same kind and convert them together." },
-      { title: "Control the result", description: "Adjust size, image quality, or audio quality where available." },
+      {
+        title: "One place for your files",
+        description: "Convert images, video, and audio in one app.",
+      },
+      {
+        title: "Work with multiple files",
+        description: "Select files of the same kind and convert them together.",
+      },
+      {
+        title: "Control the result",
+        description:
+          "Adjust size, image quality, or audio quality where available.",
+      },
     ],
     formatsTitle: "Supported file formats",
     formatsDescription: "Work with image, video, and audio formats.",
     formatsCountLabel: "formats",
     formatGroups: ["Images", "Video", "Audio"],
-    formatsNote: "Available output formats and settings depend on the input file type.",
+    formatsNote:
+      "Available output formats and settings depend on the input file type.",
     downloadTitle: "Use the desktop app",
     downloadDescription:
       "Find the desktop download for your operating system on the GitHub releases page.",
@@ -134,7 +160,10 @@ export function WebDownloadGuide({ locale }: { locale: Locale }) {
         </div>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {formatGroups.map((formats, index) => (
-            <div key={text.formatGroups[index]} className="rounded-2xl border border-[#e3e8f1] bg-white p-5">
+            <div
+              key={text.formatGroups[index]}
+              className="rounded-2xl border border-[#e3e8f1] bg-white p-5"
+            >
               <h4 className="font-bold text-[#263143]">
                 {text.formatGroups[index]}
                 <span className="ml-2 text-sm font-normal text-[#526079]">
