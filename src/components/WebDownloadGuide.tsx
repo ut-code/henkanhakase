@@ -3,10 +3,14 @@ import type { Locale } from "../i18n";
 const copy = {
   ja: {
     label: "変換はかせとは？",
-    title: "ファイル変換を、もっと手軽に。",
+    title: "ファイル変換、これ一つ",
     description:
       "変換はかせは、画像・動画・音声の形式を変換できるアプリです。複数のファイルをまとめて選び、出力形式や画質などを調整できます。",
-    features: ["画像・動画・音声に対応", "複数ファイルをまとめて変換", "サイズや品質を調整"],
+    features: [
+      "画像・動画・音声に対応",
+      "複数ファイルをまとめて変換",
+      "サイズや品質を調整",
+    ],
     downloadTitle: "デスクトップ版を使う",
     downloadDescription:
       "お使いの OS に対応するデスクトップ版を、GitHub のリリースページから入手できます。",
@@ -14,7 +18,7 @@ const copy = {
   },
   en: {
     label: "About Henkan Hakase",
-    title: "File conversion made simple.",
+    title: "All your file conversions in one place.",
     description:
       "Henkan Hakase converts image, video, and audio formats. Select multiple files and adjust the output format, quality, and size.",
     features: [
