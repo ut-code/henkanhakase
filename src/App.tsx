@@ -978,7 +978,7 @@ function App() {
             font-['Plus_Jakarta_Sans','Noto_Sans_JP',sans-serif]
             text-lg font-bold
             tracking-[-0.3px]
-            text-[#1d2c43]
+            text-[#586cec]
           "
         >
           <img src={Logo} alt="" className="size-10" />
@@ -986,17 +986,6 @@ function App() {
         </div>
 
         <div className="flex items-center gap-3 text-xs text-[#8390a3]">
-          <span
-            className={[
-              "size-1.75 rounded-full bg-[#aeb8c7]",
-              isConverting &&
-                "animate-[pulse_1s_infinite_alternate] bg-[#6578f7]",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          />
-
-          {isConverting ? t("converting") : t("waiting")}
           <label className="flex items-center gap-1">
             <span className="sr-only">{t("language")}</span>
             <select
