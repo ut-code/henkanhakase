@@ -10,13 +10,12 @@ FFmpeg is a separate program, invoked by henkanhakase as a subprocess.
 同梱している FFmpeg のライセンス / License of the bundled FFmpeg
 ----------------------------------------------------------------
 
-- Windows / Linux 版、GitHub で配布する macOS 版:
-  GNU General Public License version 3 or later (FFmpeg-COPYING.GPLv3.txt)
-- Mac App Store 版:
-  GNU Lesser General Public License version 2.1 or later (FFmpeg-COPYING.LGPLv2.1.txt)
+GNU General Public License version 2 or later (FFmpeg-COPYING.GPLv2.txt)
 
 正確なライセンスは同梱の FFmpeg で `ffmpeg -L` を実行して確認できます。
-LGPLv3 の本文 (FFmpeg-COPYING.LGPLv3.txt) は、FFmpeg を LGPLv3 で利用する場合のために同梱しています。
+GPLv3 の本文 (FFmpeg-COPYING.GPLv3.txt) は、FFmpeg を GPLv3 で利用する場合のために同梱しています。
+FFmpeg と同梱のライブラリ (LAME) の一部は LGPL で提供されているため、その本文 (FFmpeg-COPYING.LGPLv2.1.txt, FFmpeg-COPYING.LGPLv3.txt) も同梱しています。
+静的リンクしているライブラリとそのライセンスは FFmpeg-LIBRARIES.txt を参照してください。
 
 ソースコード / Source code
 --------------------------

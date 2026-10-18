@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import license, { type Dependency } from "rollup-plugin-license";
+import spdxSatisfies from "spdx-satisfies";
 import { defineConfig } from "vite";
 import wasm from "vite-plugin-wasm";
 
@@ -22,6 +23,35 @@ function licenseTextOf(dep: Dependency): string {
   );
 }
 
+// 本体(MIT)と両立するライセンスのみ許可する。src-tauri/about.toml の accepted と揃える
+const ALLOWED_LICENSES =
+  "(MIT OR MIT-0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR BSD-2-Clause OR BSD-3-Clause OR 0BSD OR ISC OR Zlib OR Unicode-3.0 OR Unlicense OR CC0-1.0 OR MPL-2.0)";
+
+// license が SPDX の書式になっていないパッケージは、選べるライセンスを明示する。
+// 更新でライセンスが変わっても見逃さないよう、バージョンごとに指定する
+const LICENSE_OVERRIDES = new Map<string, string>([
+  // "MIT OR SEE LICENSE IN FEEL-FREE.md"(jspdf の依存)
+  ["rgbcolor@1.0.1", "MIT"],
+]);
+
+function isAllowedLicense(dep: Dependency): boolean {
+  const spdx =
+    LICENSE_OVERRIDES.get(`${dep.name}@${dep.version}`) ?? dep.license;
+  if (!spdx) return false;
+  try {
+    return spdxSatisfies(spdx, ALLOWED_LICENSES);
+  } catch {
+    // SPDX として解釈できない場合
+    return false;
+  }
+}
+
+function repositoryOf(dep: Dependency): string {
+  const repository = dep.repository;
+  if (!repository) return dep.homepage ?? "";
+  return typeof repository === "string" ? repository : repository.url;
+}
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
@@ -33,7 +63,7 @@ export default defineConfig(async () => ({
       ...license({
         thirdParty: {
           allow: {
-            test: "(MIT OR Apache-2.0 OR BSD-3-Clause OR ISC OR 0BSD)",
+            test: isAllowedLicense,
             failOnUnlicensed: true,
             failOnViolation: true,
           },
@@ -51,6 +81,8 @@ export default defineConfig(async () => ({
                   [
                     "--------------------------------------------------------------------------------",
                     `${dep.name} ${dep.version} (${dep.license})`,
+                    // MPL-2.0 などはソースの入手先を示す必要があるため、リポジトリを載せる
+                    repositoryOf(dep),
                     "",
                     licenseTextOf(dep),
                     dep.noticeText ?? "",

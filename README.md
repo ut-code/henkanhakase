@@ -16,7 +16,7 @@
 | パス                        | 内容                                                          |
 | --------------------------- | ------------------------------------------------------------- |
 | `public`                    | ビルド後にルートに置かれる。画像など                          |
-| `scripts/build-ffmpeg-lgpl-macos.sh` | MacOS向けLGPL版FFmpegのビルドスクリプト                       |
+| `scripts/build-ffmpeg.sh`   | 同梱するFFmpeg(GPL版・LGPL版)のビルドスクリプト               |
 | `src/assets`              | 画像など。importして使える                                            |
 | `src/components`            | Reactのコンポーネント                                          |
 | `src/utils/dimension.ts` | 画像や動画のサイズの正規化                                   |
@@ -37,6 +37,7 @@
 | `src-tauri/.gitignore`      | Gitで管理しないファイルの設定(バックエンド)                   |
 | `src-tauri/about.hbs` | Rustで使用している依存ライブラリのライセンス一覧を表示するためのテンプレート |
 | `src-tauri/tauri.conf.json` | Tauriの設定ファイル                                           |
+| `src-tauri/tauri.windows.conf.json` | TauriのWindows版の設定ファイル(Windows版にだけ同梱するライセンス表記) |
 | `src-tauri/tauri.lgpl.conf.json` | TauriのLGPL版の設定ファイル(同梱するバイナリをLGPL版に上書き)                  |
 | `src-tauri/build.rs` | Tauriのビルドスクリプト。LGPL版の場合に同梱バイナリがLGPLかどうかを確認する |
 | `src-tauri/about.toml`      | Rustのライセンス依存情報                                   |
@@ -89,40 +90,30 @@
 
 ## FFmpegのバイナリファイルの設置
 
-1. `src-tauri/binaries`ディレクトリを作成
+アプリに同梱する FFmpeg は `scripts/build-ffmpeg.sh` でビルドします。必要なライブラリだけを静的リンクし、配布時にリリースへ添付する対応ソースコード一式も出力します。
 
-2. Linux用のバイナリファイルの用意
-   1. https://github.com/BtbN/FFmpeg-Builds/releases から`ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz`をダウンロード
-   2. 解凍して出てくる`bin/ffmpeg`を`src-tauri/binaries`配下に設置
-   3. `ffmpeg-x86_64-unknown-linux-gnu`にリネームする
+| 同梱先                      | コマンド                              | ビルドする環境                  |
+| --------------------------- | ------------------------------------- | ------------------------------- |
+| Linux                       | `scripts/build-ffmpeg.sh gpl`         | Linux(WSL を含む)             |
+| Windows                     | `scripts/build-ffmpeg.sh gpl windows` | Linux(WSL を含む)からクロスコンパイル |
+| macOS(Intel / Apple Silicon) | `scripts/build-ffmpeg.sh gpl`         | 同じアーキテクチャの Mac        |
+| Mac App Store               | `scripts/build-ffmpeg.sh lgpl`        | 同じアーキテクチャの Mac        |
 
-3. Windows用のバイナリファイルの用意
-   1. https://www.gyan.dev/ffmpeg/builds/ から`ffmpeg-release-full.7z`をダウンロード
-   2. 解凍して出てくる`bin/ffmpeg.exe`を`src-tauri/binaries`配下に設置
-   3. `ffmpeg-x86_64-pc-windows-msvc.exe`にリネームする
+事前に必要なツールをインストールしてください。
 
-4. MacOS(Intel)用のバイナリファイルの用意
-   1. https://evermeet.cx/ffmpeg/ から`ffmpeg-9.0.1.7z`をダウンロード
-   2. 解凍して出てくる`ffmpeg`を`src-tauri/binaries`配下に設置
-   3. `ffmpeg-x86_64-apple-darwin`にリネームする
+```bash
+# Linux / WSL(Windows 向けもビルドする場合は mingw-w64 も)
+sudo apt install build-essential pkg-config cmake nasm curl mingw-w64
 
-5. MacOS(Apple Silicon)用のバイナリファイルの用意
-   1. https://www.osxexperts.net/ で"Download ffmpeg 9.0 (Apple Silicon)"をクリックして`ffmpeg9arm.zip`をダウンロード
-   2. 解凍して出てくる`ffmpeg`を`src-tauri/binaries`配下に設置
-   3. `ffmpeg-aarch64-apple-darwin`にリネームする
+# macOS
+xcode-select --install
+brew install pkg-config cmake nasm
+```
 
-6. バイナリファイルの実行権限を付与(初回のみ)
-
-   ```bash
-   chmod +x src-tauri/binaries/ffmpeg-*
-   ```
-
-7. Mac App Store向けLGPL版のFFmpegのビルド(MacOSでのみビルド可能)
-
-   ```bash
-   brew install pkg-config nasm
-   scripts/build-ffmpeg-lgpl-macos.sh
-   ```
+- バイナリは `src-tauri/binaries`(LGPL 版は `src-tauri/binaries-lgpl`)に、Tauri の sidecar の名前(`henkanhakase-ffmpeg-x86_64-unknown-linux-gnu` など)で出力されます。Linux の `.deb` では `/usr/bin` に置かれるため、ディストリビューションの `ffmpeg` とぶつからないよう `henkanhakase-` を付けています
+- 初回は依存ライブラリのビルドに数十分かかります。2 回目以降はビルド済みのライブラリをスキップします
+- Linux 版はビルドした環境の glibc に依存します。アプリ本体と同じく、対応したい中で最も古いディストリビューションでビルドしてください
+- バージョンや設定はスクリプト冒頭のコメントを参照してください
 
 ## 開発
 
@@ -186,10 +177,12 @@
 
 | 配布先                                    | 同梱する FFmpeg                       | ビルド方法                 |
 | ----------------------------------------- | ------------------------------------- | -------------------------- |
-| GitHub(Windows / Linux / macOS)、Microsoft Store | GPLv3 版(`src-tauri/binaries`)      | `npm run tauri build`      |
-| Mac App Store                             | LGPL 版(`src-tauri/binaries-lgpl`) | `npm run tauri:build:lgpl` |
+| GitHub(Windows / Linux / macOS)、Microsoft Store | GPL 版(GPL-2.0-or-later、`src-tauri/binaries`) | `npm run tauri build`      |
+| Mac App Store                             | LGPL 版(LGPL-2.1-or-later、`src-tauri/binaries-lgpl`) | `npm run tauri:build:lgpl` |
 
-FFmpeg を同梱して配布する場合は、配布したバイナリに対応する FFmpeg のソースコードを GitHub のリリースに添付してください。ライセンスの本文と説明は `src-tauri/licenses/FFmpeg-*.txt` にあり、インストーラーに同梱されます。
+同梱する FFmpeg は、どちらも `scripts/build-ffmpeg.sh` で同じバージョンのソースからビルドします(`--enable-version3` / `--enable-nonfree` は付けません)。
+
+配布するときは、スクリプトが `~/ffmpeg-build/out` に出力する対応ソースコード一式を GitHub のリリースに添付してください。ソースは全プラットフォームで共通なので、GPL 版(`ffmpeg-gpl-<version>-src.tar.gz`)と LGPL 版(`ffmpeg-lgpl-<version>-src.tar.gz`)をそれぞれ 1 つ添付すれば足ります。ライセンスの本文と説明は `src-tauri/licenses/FFmpeg-*.txt` にあり、インストーラーに同梱されます。
 
 ### macOS 向け LGPL 版のビルド
 
@@ -199,17 +192,7 @@ H.264 エンコーダの libx264 は GPL のため、LGPL 版では macOS 標準
 
 - 画質(CRF)は VideoToolbox の `-q:v` に変換して指定します。Intel Mac では `-q:v` が使えないため、エンコーダの既定のビットレートになります
 - `-allow_sw 1` を付けているため、ハードウェアエンコーダが使えない環境ではソフトウェアエンコードになります
-- 同梱する FFmpeg は `--enable-gpl` を付けずにビルドした LGPL 版を使ってください。Homebrew の `ffmpeg` は GPL 版なので使えません。macOS で次のスクリプトを実行すると、依存ライブラリ(libvpx・LAME・Opus・Vorbis・WebP)ごと静的リンクでビルドされます
-
-  ```bash
-  brew install pkg-config nasm
-  scripts/build-ffmpeg-lgpl-macos.sh
-  ```
-
-  - バイナリは `src-tauri/binaries-lgpl` に、リリースに添付する対応ソースコード一式(`ffmpeg-lgpl-<version>-macos-src.tar.gz`)は `~/ffmpeg-lgpl/out` に出力されます
-  - ビルド後に、ライセンスが LGPL であること、必要なエンコーダがそろっていること、Homebrew などのライブラリに動的リンクしていないことを自動で検証します
-  - バージョンや設定はスクリプト冒頭のコメントを参照してください
-
+- Homebrew などで配布されている `ffmpeg` は GPL 版なので使えません。`scripts/build-ffmpeg.sh lgpl` でビルドしてください
 - Mac App Store ではアプリ全体がサンドボックスで動くため、同梱する FFmpeg にも `com.apple.security.app-sandbox` と `com.apple.security.inherit` の entitlements を付けて署名してください
 
 ### 依存ライブラリのライセンス一覧
@@ -221,6 +204,8 @@ H.264 エンコーダの libx264 は GPL のため、LGPL 版では macOS 標準
 | `THIRD_PARTY_LICENSES_FRONTEND.txt` | フロントエンドのライブラリ | `npm run build` で自動生成(Git 管理外)                    |
 | `THIRD_PARTY_LICENSES_RUST.txt`    | Rust のクレート            | `npm run licenses` で生成(リリース前と Rust の依存を変えたとき) |
 | `THIRD_PARTY_LICENSES_OTHER.txt`   | Tailwind CSS、アイコンなど | 手動で編集                                                  |
+| `FFmpeg-LIBRARIES.txt`             | FFmpeg に静的リンクしたライブラリ | `scripts/build-ffmpeg.sh` で生成(ライブラリのバージョンを変えたとき) |
+| `FFmpeg-MinGW-w64.txt`             | Windows 版の FFmpeg に静的リンクした MinGW-w64 のランタイム | 手動で編集(MinGW-w64 のメジャーバージョンを変えたとき) |
 
 `npm run licenses` には [cargo-about](https://github.com/EmbarkStudios/cargo-about) が必要です。
 

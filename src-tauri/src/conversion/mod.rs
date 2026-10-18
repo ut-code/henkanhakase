@@ -18,7 +18,12 @@ use tauri_plugin_shell::ShellExt;
 pub use error::{ApiError, ConversionError, ErrorCode};
 use progress::{percentage, ConversionProgress};
 use types::FileFormat;
+
 pub use types::{ConversionRequest, MediaDimensions, MediaProbeRequest};
+
+/// 同梱する FFmpeg の sidecar 名。Linux の .deb では /usr/bin に置かれるため、
+/// ディストリビューションの ffmpeg パッケージとぶつからない名前にする
+const FFMPEG_SIDECAR: &str = "henkanhakase-ffmpeg";
 
 /// 指定された一時ファイルを明示的に削除する関数
 pub fn remove_temp_file(path_str: &str) {
@@ -152,7 +157,7 @@ pub async fn convert(
 
     let (mut rx, child) = app
         .shell()
-        .sidecar("ffmpeg")
+        .sidecar(FFMPEG_SIDECAR)
         .map_err(|_| ConversionError::new(ErrorCode::FfmpegUnavailable))?
         .args(args)
         .spawn()
@@ -201,7 +206,7 @@ pub async fn convert(
 async fn probe_duration_ms(app: &AppHandle, input_path: &Path) -> Option<u64> {
     let output = app
         .shell()
-        .sidecar("ffmpeg")
+        .sidecar(FFMPEG_SIDECAR)
         .ok()?
         .args([
             "-hide_banner".into(),
@@ -250,7 +255,7 @@ pub async fn probe_dimensions(
 
     let output = app
         .shell()
-        .sidecar("ffmpeg")
+        .sidecar(FFMPEG_SIDECAR)
         .map_err(|_| ConversionError::new(ErrorCode::FfmpegUnavailable))?
         .args([
             "-y".to_string(),
@@ -328,7 +333,7 @@ pub async fn generate_thumbnail(
 
     let output = app
         .shell()
-        .sidecar("ffmpeg")
+        .sidecar(FFMPEG_SIDECAR)
         .map_err(|_| ConversionError::new(ErrorCode::FfmpegUnavailable))?
         .args(args)
         .output()

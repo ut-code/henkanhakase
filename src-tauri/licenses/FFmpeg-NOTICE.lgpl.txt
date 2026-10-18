@@ -14,6 +14,7 @@ GNU Lesser General Public License version 2.1 or later (FFmpeg-COPYING.LGPLv2.1.
 
 正確なライセンスは同梱の FFmpeg で `ffmpeg -L` を実行して確認できます。
 LGPLv3 の本文 (FFmpeg-COPYING.LGPLv3.txt) は、FFmpeg を LGPLv3 で利用する場合のために同梱しています。
+静的リンクしているライブラリとそのライセンスは FFmpeg-LIBRARIES.txt を参照してください。
 
 ソースコード / Source code
 --------------------------
