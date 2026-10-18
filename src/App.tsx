@@ -29,6 +29,7 @@ import { PdfOptions } from "./components/PdfOptions";
 import { ResizeOptions } from "./components/ResizeOptions";
 import { TermsOfService } from "./components/TermsOfService";
 import { VideoOptions } from "./components/VideoOptions";
+import { WebDownloadGuide } from "./components/WebDownloadGuide";
 import {
   AUDIO_FORMATS,
   type AudioCompressionOptions,
@@ -1111,17 +1112,6 @@ function App() {
         </div>
 
         <div className="flex items-center gap-3 text-xs text-[#8390a3]">
-          <span
-            className={[
-              "size-1.75 rounded-full bg-[#aeb8c7]",
-              isConverting &&
-                "animate-[pulse_1s_infinite_alternate] bg-[#6578f7]",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          />
-
-          {isConverting ? t("converting") : t("waiting")}
           <label className="flex items-center gap-1">
             <span className="sr-only">{t("language")}</span>
             <select
@@ -1790,6 +1780,7 @@ function App() {
 
       {/* Footer */}
       <Footer />
+      {!isTauri() && <WebDownloadGuide locale={locale} />}
 
       {/* Media Modal */}
       <MediaModal

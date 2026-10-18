@@ -32,4 +32,5 @@ tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tokio = { version = "1.53.1", features = ["time"] }
 heif-oxide = "0.1"
-image = "0.25"    
+# HEIC の出力(heic.rs)でのみ使う。出力形式を増やすときは features も追加する
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }

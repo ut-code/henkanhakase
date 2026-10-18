@@ -12,6 +12,7 @@ node_modules
 dist
 dist-web
 dist-ssr
+dist-web
 *.local
 tsconfig.node.tsbuildinfo
 

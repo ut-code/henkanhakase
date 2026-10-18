@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import license, { type Dependency } from "rollup-plugin-license";
-import spdxExpressionValidate from "spdx-expression-validate";
 import spdxSatisfies from "spdx-satisfies";
 import { defineConfig } from "vite";
 import wasm from "vite-plugin-wasm";
@@ -41,19 +40,61 @@ function licenseDocument(text: string, title: string): string {
 `;
 }
 
-// LICENSE ファイルが SPDX のメタデータしかないパッケージ(Tauri のプラグインなど)は、
-// 著作権表示を取り出して MIT の本文を補う
+// LICENSE ファイルが SPDX のメタデータしかないパッケージ
+// (Tauri のプラグインなど) は、著作権表示を取り出して MIT の本文を補う。
 function licenseTextOf(dep: Dependency): string {
   const text = dep.licenseText ?? "";
   if (!/^SPDXVersion:/.test(text)) return text;
+
   const copyright = text.match(/^PackageCopyrightText: (.*)$/m)?.[1];
-  if (!copyright) throw new Error(`No copyright found for ${dep.name}`);
+  if (!copyright) {
+    throw new Error(`No copyright found for ${dep.name}`);
+  }
+
   return readFileSync("LICENSE", "utf-8").replace(
     /^Copyright .*$/m,
     `Copyright (c) ${copyright}`,
   );
 }
 
+// 本体(MIT)と両立するライセンスのみ許可する。
+// src-tauri/about.toml の accepted と揃える。
+const ALLOWED_LICENSES =
+  "(MIT OR MIT-0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR BSD-2-Clause OR BSD-3-Clause OR 0BSD OR ISC OR Zlib OR Unicode-3.0 OR Unlicense OR CC0-1.0 OR MPL-2.0)";
+
+// SPDX 表記が標準的でないパッケージは、バージョンを指定して扱う。
+// 更新でライセンスが変わった場合に、無条件で許可しないための設定。
+const LICENSE_OVERRIDES = new Map<string, string>([
+  // jspdf の依存パッケージ
+  ["rgbcolor@1.0.1", "MIT"],
+]);
+
+function isAllowedLicense(dep: Dependency): boolean {
+  const spdx =
+    LICENSE_OVERRIDES.get(`${dep.name}@${dep.version}`) ?? dep.license;
+
+  if (!spdx) return false;
+
+  // ブラウザ版では GPL-2.0-or-later も許可する。
+  const allowedLicenses =
+    process.env.npm_lifecycle_event === "build:web"
+      ? "(MIT OR MIT-0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR BSD-2-Clause OR BSD-3-Clause OR 0BSD OR ISC OR Zlib OR Unicode-3.0 OR Unlicense OR CC0-1.0 OR MPL-2.0 OR GPL-2.0-or-later)"
+      : ALLOWED_LICENSES;
+
+  try {
+    return spdxSatisfies(spdx, allowedLicenses);
+  } catch {
+    return false;
+  }
+}
+
+function repositoryOf(dep: Dependency): string {
+  const repository = dep.repository;
+  if (!repository) return dep.homepage ?? "";
+  return typeof repository === "string" ? repository : repository.url;
+}
+
+// FFmpeg 関連パッケージのライセンス本文を個別に取得する。
 function ffmpegPackageLicenseText(dep: Dependency): string | null {
   if (dep.name === "@ffmpeg/core") {
     return readFileSync("src-tauri/licenses/FFmpeg-COPYING.GPLv3.txt", "utf-8");
@@ -61,7 +102,7 @@ function ffmpegPackageLicenseText(dep: Dependency): string | null {
 
   if (dep.name === "@ffmpeg/ffmpeg" || dep.name === "@ffmpeg/util") {
     return `
-    MIT License
+MIT License
 
 Copyright (c) 2019 Jerome Wu
 
@@ -92,6 +133,7 @@ SOFTWARE.
 export default defineConfig(async ({ mode }) => {
   const isBrowserBuild = mode === "browser";
   const isLgplBuild = process.env.VITE_FFMPEG_LICENSE === "lgpl";
+
   const licenseFiles = isBrowserBuild
     ? [
         "LICENSE",
@@ -110,6 +152,7 @@ export default defineConfig(async ({ mode }) => {
           ? "licenses/FFmpeg-COPYING.LGPLv2.1.txt"
           : "licenses/FFmpeg-COPYING.GPLv3.txt",
       ];
+
   const combinedLicenseFiles = licenseFiles.filter(
     (file) => file !== "LICENSE",
   );
@@ -120,31 +163,13 @@ export default defineConfig(async ({ mode }) => {
       react(),
       wasm(),
       tailwindcss(),
-      // ビルド時にバンドルされたライブラリのライセンス一覧を書き出す
+
+      // ビルド時にバンドルされたライブラリのライセンス一覧を書き出す。
       {
         ...license({
           thirdParty: {
             allow: {
-              test: (dependency: Dependency) => {
-                // rgbcolor の独自ライセンス表記への対応
-                if (
-                  dependency.name === "rgbcolor" &&
-                  dependency.license === "MIT OR SEE LICENSE IN FEEL-FREE.md"
-                ) {
-                  return true;
-                }
-
-                const allowedLicenses = isBrowserBuild
-                  ? "(MIT OR Apache-2.0 OR BSD-3-Clause OR ISC OR 0BSD OR Zlib OR MPL-2.0 OR GPL-2.0-or-later)"
-                  : "(MIT OR Apache-2.0 OR BSD-3-Clause OR ISC OR 0BSD OR Zlib OR MPL-2.0)";
-
-                const license = dependency.license;
-                return (
-                  typeof license === "string" &&
-                  spdxExpressionValidate(license) &&
-                  spdxSatisfies(license, allowedLicenses)
-                );
-              },
+              test: isAllowedLicense,
               failOnUnlicensed: true,
               failOnViolation: true,
             },
@@ -162,6 +187,8 @@ export default defineConfig(async ({ mode }) => {
                     [
                       "--------------------------------------------------------------------------------",
                       `${dep.name} ${dep.version} (${dep.license})`,
+                      // MPL-2.0 などのライセンスに対応するため、リポジトリを記載する。
+                      repositoryOf(dep),
                       "",
                       ffmpegPackageLicenseText(dep) ?? licenseTextOf(dep),
                       dep.noticeText ?? "",
@@ -173,11 +200,13 @@ export default defineConfig(async ({ mode }) => {
         }),
         apply: "build" as const,
       },
+
       {
         name: "copy-distributed-licenses",
         writeBundle() {
           const outputDirectory = isBrowserBuild ? "dist-web" : "dist";
           const outputLicenseDirectory = resolve(outputDirectory, "licenses");
+
           mkdirSync(outputLicenseDirectory, { recursive: true });
 
           const combinedLicenseText = [
@@ -187,6 +216,7 @@ export default defineConfig(async ({ mode }) => {
             ...combinedLicenseFiles.map((file) => {
               const source = resolve("src-tauri", file);
               const name = file.split("/").at(-1) ?? file;
+
               return [
                 "================================================================================",
                 name,
@@ -196,29 +226,40 @@ export default defineConfig(async ({ mode }) => {
               ].join("\n");
             }),
           ].join("\n");
+
           const combinedDestination = resolve(
             outputLicenseDirectory,
             combinedLicenseName,
           );
+
           writeFileSync(combinedDestination, combinedLicenseText, "utf8");
+
           writeFileSync(
             combinedDestination.replace(/\.txt$/, ".html"),
             licenseDocument(combinedLicenseText, combinedLicenseName),
             "utf8",
           );
 
+          // 個別のライセンスファイルも配布物にコピーする。
           for (const file of licenseFiles) {
             const source =
               file === "LICENSE" ? resolve(file) : resolve("src-tauri", file);
+
             const destination = resolve(
               outputDirectory,
               file === "LICENSE" ? "licenses/LICENSE.txt" : file,
             );
-            mkdirSync(resolve(destination, ".."), { recursive: true });
+
+            mkdirSync(resolve(destination, ".."), {
+              recursive: true,
+            });
+
             copyFileSync(source, destination);
+
             const htmlDestination = destination.replace(/\.txt$/, ".html");
             const title = file.split("/").at(-1) ?? file;
             const html = licenseDocument(readFileSync(source, "utf8"), title);
+
             writeFileSync(htmlDestination, html, "utf8");
           }
         },
@@ -248,6 +289,7 @@ export default defineConfig(async ({ mode }) => {
     //
     // 1. prevent Vite from obscuring rust errors
     clearScreen: false,
+
     // 2. tauri expects a fixed port, fail if that port is not available
     server: {
       port: 1420,
@@ -269,6 +311,7 @@ export default defineConfig(async ({ mode }) => {
         ignored: ["**/src-tauri/**"],
       },
     },
+
     preview: {
       headers: {
         "Cross-Origin-Opener-Policy": "same-origin",
