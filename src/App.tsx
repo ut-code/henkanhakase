@@ -246,7 +246,13 @@ function App() {
     if (mediaTypes.hasVideo) {
       const gifOnly = sourceFiles.every((file) => file.format === "GIF");
       return gifOnly
-        ? [...VIDEO_FORMATS, "GIF", "PDF", ...AUDIO_FORMATS]
+        ? [
+            ...IMAGE_FORMATS.filter(
+              (format) => format !== "HEIC" && format !== "SVG",
+            ),
+            ...VIDEO_FORMATS,
+            ...AUDIO_FORMATS,
+          ]
         : [...VIDEO_FORMATS, "GIF", ...AUDIO_FORMATS];
     }
     if (mediaTypes.hasAudio) return [...AUDIO_FORMATS];
