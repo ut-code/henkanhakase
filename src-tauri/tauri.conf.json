@@ -34,9 +34,11 @@
     "externalBin": ["binaries/henkanhakase-ffmpeg"],
     "resources": {
       "../LICENSE": "LICENSE",
+      "licenses/FFmpeg-COPYING.GPLv2.txt": "licenses/FFmpeg-COPYING.GPLv2.txt",
       "licenses/FFmpeg-COPYING.GPLv3.txt": "licenses/FFmpeg-COPYING.GPLv3.txt",
       "licenses/FFmpeg-COPYING.LGPLv2.1.txt": "licenses/FFmpeg-COPYING.LGPLv2.1.txt",
       "licenses/FFmpeg-COPYING.LGPLv3.txt": "licenses/FFmpeg-COPYING.LGPLv3.txt",
+      "licenses/FFmpeg-LIBRARIES.txt": "licenses/FFmpeg-LIBRARIES.txt",
       "licenses/FFmpeg-NOTICE.txt": "licenses/FFmpeg-NOTICE.txt",
       "licenses/THIRD_PARTY_LICENSES_FRONTEND.txt": "licenses/THIRD_PARTY_LICENSES_FRONTEND.txt",
       "licenses/THIRD_PARTY_LICENSES_OTHER.txt": "licenses/THIRD_PARTY_LICENSES_OTHER.txt",

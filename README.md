@@ -37,6 +37,7 @@
 | `src-tauri/.gitignore`      | Gitで管理しないファイルの設定(バックエンド)                   |
 | `src-tauri/about.hbs` | Rustで使用している依存ライブラリのライセンス一覧を表示するためのテンプレート |
 | `src-tauri/tauri.conf.json` | Tauriの設定ファイル                                           |
+| `src-tauri/tauri.windows.conf.json` | TauriのWindows版の設定ファイル(Windows版にだけ同梱するライセンス表記) |
 | `src-tauri/tauri.lgpl.conf.json` | TauriのLGPL版の設定ファイル(同梱するバイナリをLGPL版に上書き)                  |
 | `src-tauri/build.rs` | Tauriのビルドスクリプト。LGPL版の場合に同梱バイナリがLGPLかどうかを確認する |
 | `src-tauri/about.toml`      | Rustのライセンス依存情報                                   |
@@ -203,6 +204,8 @@ H.264 エンコーダの libx264 は GPL のため、LGPL 版では macOS 標準
 | `THIRD_PARTY_LICENSES_FRONTEND.txt` | フロントエンドのライブラリ | `npm run build` で自動生成(Git 管理外)                    |
 | `THIRD_PARTY_LICENSES_RUST.txt`    | Rust のクレート            | `npm run licenses` で生成(リリース前と Rust の依存を変えたとき) |
 | `THIRD_PARTY_LICENSES_OTHER.txt`   | Tailwind CSS、アイコンなど | 手動で編集                                                  |
+| `FFmpeg-LIBRARIES.txt`             | FFmpeg に静的リンクしたライブラリ | `scripts/build-ffmpeg.sh` で生成(ライブラリのバージョンを変えたとき) |
+| `FFmpeg-MinGW-w64.txt`             | Windows 版の FFmpeg に静的リンクした MinGW-w64 のランタイム | 手動で編集(MinGW-w64 のメジャーバージョンを変えたとき) |
 
 `npm run licenses` には [cargo-about](https://github.com/EmbarkStudios/cargo-about) が必要です。
 
