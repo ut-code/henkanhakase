@@ -34,7 +34,7 @@ fn check_ffmpeg_license() {
     println!("cargo:rerun-if-changed={}", path.display());
     if !path.exists() {
         panic!(
-            "{} がありません。scripts/build-ffmpeg-lgpl-macos.sh で LGPL 版の FFmpeg をビルドしてください",
+            "{} がありません。`scripts/build-ffmpeg.sh lgpl` で LGPL 版の FFmpeg をビルドしてください",
             path.display()
         );
     }
