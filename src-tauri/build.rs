@@ -12,7 +12,7 @@ fn check_ffmpeg_license() {
     let lgpl_feature = env::var_os("CARGO_FEATURE_LGPL_FFMPEG").is_some();
     // tauri CLI の --config で上書きした設定(tauri.lgpl.conf.json)はここに入る
     let uses_lgpl_binaries = env::var("TAURI_CONFIG")
-        .map(|config| config.contains("binaries-lgpl/ffmpeg"))
+        .map(|config| config.contains("binaries-lgpl/henkanhakase-ffmpeg"))
         .unwrap_or(false);
 
     if !lgpl_feature {
@@ -30,7 +30,7 @@ fn check_ffmpeg_license() {
     }
 
     let target = env::var("TARGET").unwrap();
-    let path = Path::new("binaries-lgpl").join(format!("ffmpeg-{target}"));
+    let path = Path::new("binaries-lgpl").join(format!("henkanhakase-ffmpeg-{target}"));
     println!("cargo:rerun-if-changed={}", path.display());
     if !path.exists() {
         panic!(

@@ -6,7 +6,7 @@
 #   scripts/build-ffmpeg-lgpl-macos.sh
 #
 # 成果物:
-#   src-tauri/binaries-lgpl/ffmpeg-<arch>-apple-darwin
+#   src-tauri/binaries-lgpl/henkanhakase-ffmpeg-<arch>-apple-darwin
 #     … LGPL 版のバイナリ。`npm run tauri:build:lgpl` で同梱される(GPL 版の src-tauri/binaries はそのまま)
 #   $WORK_DIR/out/ffmpeg-lgpl-<version>-macos-src.tar.gz
 #     … 配布時にリリースへ添付する、対応するソースコード一式
@@ -240,7 +240,7 @@ echo "OK: LGPL / 必要なエンコーダあり / 外部の動的ライブラリ
 log "成果物を出力"
 
 mkdir -p "$LGPL_BIN_DIR"
-OUT_BIN="$LGPL_BIN_DIR/ffmpeg-$ARCH-apple-darwin"
+OUT_BIN="$LGPL_BIN_DIR/henkanhakase-ffmpeg-$ARCH-apple-darwin"
 cp "$FFMPEG_BIN" "$OUT_BIN"
 
 # 対応するソースコード一式(各ライブラリのソースとこのスクリプト)

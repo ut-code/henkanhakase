@@ -31,7 +31,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/ffmpeg"],
+    "externalBin": ["binaries/henkanhakase-ffmpeg"],
     "resources": {
       "../LICENSE": "LICENSE",
       "licenses/FFmpeg-COPYING.GPLv3.txt": "licenses/FFmpeg-COPYING.GPLv3.txt",

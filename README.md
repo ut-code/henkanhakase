@@ -94,27 +94,27 @@
 2. Linux用のバイナリファイルの用意
    1. https://github.com/BtbN/FFmpeg-Builds/releases から`ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz`をダウンロード
    2. 解凍して出てくる`bin/ffmpeg`を`src-tauri/binaries`配下に設置
-   3. `ffmpeg-x86_64-unknown-linux-gnu`にリネームする
+   3. `henkanhakase-ffmpeg-x86_64-unknown-linux-gnu`にリネームする
 
 3. Windows用のバイナリファイルの用意
    1. https://www.gyan.dev/ffmpeg/builds/ から`ffmpeg-release-full.7z`をダウンロード
    2. 解凍して出てくる`bin/ffmpeg.exe`を`src-tauri/binaries`配下に設置
-   3. `ffmpeg-x86_64-pc-windows-msvc.exe`にリネームする
+   3. `henkanhakase-ffmpeg-x86_64-pc-windows-msvc.exe`にリネームする
 
 4. MacOS(Intel)用のバイナリファイルの用意
    1. https://evermeet.cx/ffmpeg/ から`ffmpeg-9.0.1.7z`をダウンロード
    2. 解凍して出てくる`ffmpeg`を`src-tauri/binaries`配下に設置
-   3. `ffmpeg-x86_64-apple-darwin`にリネームする
+   3. `henkanhakase-ffmpeg-x86_64-apple-darwin`にリネームする
 
 5. MacOS(Apple Silicon)用のバイナリファイルの用意
    1. https://www.osxexperts.net/ で"Download ffmpeg 9.0 (Apple Silicon)"をクリックして`ffmpeg9arm.zip`をダウンロード
    2. 解凍して出てくる`ffmpeg`を`src-tauri/binaries`配下に設置
-   3. `ffmpeg-aarch64-apple-darwin`にリネームする
+   3. `henkanhakase-ffmpeg-aarch64-apple-darwin`にリネームする
 
 6. バイナリファイルの実行権限を付与(初回のみ)
 
    ```bash
-   chmod +x src-tauri/binaries/ffmpeg-*
+   chmod +x src-tauri/binaries/henkanhakase-ffmpeg-*
    ```
 
 7. Mac App Store向けLGPL版のFFmpegのビルド(MacOSでのみビルド可能)
