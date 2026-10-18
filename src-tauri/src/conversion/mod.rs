@@ -80,15 +80,13 @@ pub async fn convert(
         );
     };
 
-    // HEIC入力処理の判定（FFmpegではなく heif-oxide -> image で処理）
-    if request.input_format == FileFormat::Heic {
-        if !matches!(
+    // HEIC入力処理の判定
+    if request.input_format == FileFormat::Heic
+        && matches!(
             request.output_format,
             FileFormat::Png | FileFormat::Jpeg | FileFormat::Webp
-        ) {
-            return Err(ConversionError::new(ErrorCode::InvalidOptions));
-        }
-
+        )
+    {
         emit_progress(Some(10), "running");
 
         if cancel_flag.load(Ordering::Relaxed) {
@@ -116,14 +114,33 @@ pub async fn convert(
         return Ok(final_path.to_string_lossy().into_owned());
     }
 
+    // HEIC から {PNG, JPEG, WebP} 以外への変換を行う場合、まず一時ファイルとして PNG に変換する
+    let (effective_input_path, effective_input_format, _tmp_png_guard) =
+        if request.input_format == FileFormat::Heic {
+            let tmp_png_path = temp_dir.join(format!("tmp_heic_converted_{}.png", timestamp));
+            let tmp_png_file = TempFile::new(tmp_png_path);
+
+            heic::convert_heic(
+                &input_path,
+                tmp_png_file.path(),
+                FileFormat::Png,
+                &types::ConversionOptions::default(),
+            )?;
+
+            let path_buf = tmp_png_file.path().to_path_buf();
+            (path_buf, FileFormat::Png, Some(tmp_png_file))
+        } else {
+            (input_path.clone(), request.input_format, None)
+        };
+
     let duration_ms = request
         .duration_ms
-        .or(probe_duration_ms(app, &input_path).await);
+        .or(probe_duration_ms(app, &effective_input_path).await);
 
     let args = ffmpeg::build_args(
-        &input_path,
+        &effective_input_path,
         output_file.path(),
-        request.input_format,
+        effective_input_format,
         request.output_format,
         &request.options,
     )

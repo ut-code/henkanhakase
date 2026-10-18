@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import license, { type Dependency } from "rollup-plugin-license";
+import spdxExpressionValidate from "spdx-expression-validate";
+import spdxSatisfies from "spdx-satisfies";
 import { defineConfig } from "vite";
+import wasm from "vite-plugin-wasm";
 
 const host = process.env.TAURI_DEV_HOST;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -115,15 +118,33 @@ export default defineConfig(async ({ mode }) => {
   return {
     plugins: [
       react(),
+      wasm(),
       tailwindcss(),
       // ビルド時にバンドルされたライブラリのライセンス一覧を書き出す
       {
         ...license({
           thirdParty: {
             allow: {
-              test: isBrowserBuild
-                ? "(MIT OR Apache-2.0 OR BSD-3-Clause OR ISC OR 0BSD OR GPL-2.0-or-later)"
-                : "(MIT OR Apache-2.0 OR BSD-3-Clause OR ISC OR 0BSD)",
+              test: (dependency: Dependency) => {
+                // rgbcolor の独自ライセンス表記への対応
+                if (
+                  dependency.name === "rgbcolor" &&
+                  dependency.license === "MIT OR SEE LICENSE IN FEEL-FREE.md"
+                ) {
+                  return true;
+                }
+
+                const allowedLicenses = isBrowserBuild
+                  ? "(MIT OR Apache-2.0 OR BSD-3-Clause OR ISC OR 0BSD OR Zlib OR MPL-2.0 OR GPL-2.0-or-later)"
+                  : "(MIT OR Apache-2.0 OR BSD-3-Clause OR ISC OR 0BSD OR Zlib OR MPL-2.0)";
+
+                const license = dependency.license;
+                return (
+                  typeof license === "string" &&
+                  spdxExpressionValidate(license) &&
+                  spdxSatisfies(license, allowedLicenses)
+                );
+              },
               failOnUnlicensed: true,
               failOnViolation: true,
             },

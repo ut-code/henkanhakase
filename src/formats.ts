@@ -7,6 +7,8 @@ export const IMAGE_FORMATS = [
   "ICO",
   "AVIF",
   "HEIC",
+  "SVG",
+  "PDF",
 ] as const;
 export const VIDEO_FORMATS = ["MP4", "WebM", "AVI", "MOV"] as const;
 export const AUDIO_FORMATS = [
@@ -62,6 +64,8 @@ export const mimeTypes: Record<Format, string[]> = {
   ICO: ["image/x-icon", "image/vnd.microsoft.icon"],
   AVIF: ["image/avif"],
   HEIC: ["image/heic", "image/heic-sequence"],
+  SVG: ["image/svg+xml"],
+  PDF: ["application/pdf"],
   MP4: ["video/mp4"],
   WebM: ["video/webm"],
   AVI: ["video/x-msvideo", "video/avi", "video/msvideo", "video/vnd.avi"],

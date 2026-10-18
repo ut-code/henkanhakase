@@ -208,5 +208,7 @@ function fileTypeForFormat(format: Format): string {
       return "audio/x-ms-wma";
     case "HEIC":
       return "image/heic";
+    default:
+      throw new Error(`Unsupported output format: ${format}`);
   }
 }

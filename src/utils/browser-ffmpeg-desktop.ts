@@ -12,7 +12,7 @@ export async function convertBrowserFile(
   _inputFormat: Format,
   _outputFormat: Format,
   _options?: BrowserConversionOptions,
-): Promise<never> {
+): Promise<Blob> {
   throw new Error("Browser FFmpeg is unavailable in the desktop build");
 }
 
