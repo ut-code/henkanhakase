@@ -1,10 +1,11 @@
 # cargo-about の設定。`npm run licenses` で licenses/THIRD_PARTY_LICENSES_RUST.txt を生成する
-# 本体(MIT)と両立するライセンスのみ許可する。新しいライセンスの依存を追加したらここに追記する
+# 本体(MIT)と両立するライセンスのみ許可する。新しいライセンスの依存を追加したらここに追記する(vite.config.ts の ALLOWED_LICENSES と揃える)
 accepted = [
     "MIT",
     "MIT-0",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
     "BSD-3-Clause",
     "0BSD",
     "ISC",
