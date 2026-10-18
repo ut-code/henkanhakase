@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
@@ -22,6 +22,7 @@ import { MediaPreview } from "./components/MediaPreview";
 import { PdfOptions } from "./components/PdfOptions";
 import { ResizeOptions } from "./components/ResizeOptions";
 import { VideoOptions } from "./components/VideoOptions";
+import { WebDownloadGuide } from "./components/WebDownloadGuide";
 import {
   AUDIO_FORMATS,
   type AudioCompressionOptions,
@@ -1635,6 +1636,8 @@ function App() {
           </div>
         )}
       </footer>
+
+      {!isTauri() && <WebDownloadGuide locale={locale} />}
 
       {/* Media Modal */}
       <MediaModal
