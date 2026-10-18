@@ -48,6 +48,35 @@ async fn generate_thumbnail(
 }
 
 #[tauri::command]
+fn create_temp_file_path(extension: String) -> Result<String, String> {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    // 使用できる拡張子を制限する
+    if !matches!(extension.as_str(), "png" | "pdf") {
+        return Err("Unsupported temporary file extension".to_string());
+    }
+
+    let temp_dir = std::env::temp_dir().join("henkanhakase");
+
+    fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp directory: {e}"))?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("Failed to get timestamp: {e}"))?
+        .as_nanos();
+
+    let path = temp_dir.join(format!(
+        "svg_converted_{}_{}.{}",
+        std::process::id(),
+        timestamp,
+        extension
+    ));
+
+    Ok(path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
 fn cleanup_temp_file(path: String) {
     conversion::remove_temp_file(&path);
 }
@@ -68,6 +97,7 @@ pub fn run() {
             probe_media_dimensions,
             cancel_conversion,
             generate_thumbnail,
+            create_temp_file_path,
             cleanup_temp_file
         ])
         // ウィンドウイベントの監視を追加（アプリ終了時に一時ディレクトリごと削除）

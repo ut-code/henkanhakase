@@ -51,6 +51,18 @@ export function FormatDropdown({
       ja: "JPEGやPNGより高い圧縮効率を持ち、画質を保ちながらファイルサイズを大幅に削減しやすい。透過やHDR、アニメーションにも対応。古いブラウザやレガシーソフトウェアでは非対応の場合がある。JPEGやPNGをWeb向けに軽量化したい場合に適している。",
       en: "Offers higher compression efficiency than JPEG and PNG, making it possible to significantly reduce file sizes while maintaining image quality. Supports transparency, HDR, and animation. May not be supported by older browsers or legacy software. Best suited for reducing JPEG and PNG file sizes for web use.",
     },
+    HEIC: {
+      ja: "高効率な圧縮方式により、画質を保ちながらJPEGよりもファイルサイズを小さくしやすい。透過処理や複数画像の格納にも対応するが、対応ソフトウェアや環境が限られる場合がある。高画質と省容量が求められる写真の保存に適している。",
+      en: "Uses highly efficient compression to achieve smaller file sizes than JPEG while maintaining image quality. Supports transparency and storing multiple images, but compatibility may be limited in some software and environments. Best suited for storing photos when high image quality and small file sizes are desired.",
+    },
+    SVG: {
+      ja: "ベクター形式のため拡大・縮小しても画質が劣化せず、図形や文字を鮮明に表示できる。写真など複雑な画像の保存には適さない場合がある。ロゴやアイコン、イラストなど、拡大・縮小や編集が必要な画像に適している。",
+      en: "As a vector format, it can be scaled without loss of quality and renders shapes and text sharply. It may be unsuitable for complex images such as photographs. Best suited for logos, icons, and illustrations that require scaling or editing.",
+    },
+    PDF: {
+      ja: "文字や図表、画像などを1つの文書として保存でき、異なる環境でもレイアウトを維持しやすい。画像を含む場合はファイルサイズが大きくなることがある。文書や資料、印刷物など、レイアウトを保ったまま共有・配布したい場合に適している。",
+      en: "Combines text, charts, and images into a single document while preserving layout across different environments. File sizes may increase when images are included. Best suited for documents, reports, and print materials that need to be shared or distributed with consistent formatting.",
+    },
     MP4: {
       ja: "ほぼ全ての端末やブラウザで再生可能な互換性と高い圧縮効率を兼ね備える。コンテナ内のコーデック仕様に依存する。Web配信やSNS投稿、汎用的な動画共有に適している。",
       en: "Combines broad compatibility across almost all devices and browsers with high compression efficiency. Playback depends on internal codec support. Best suited for web streaming, social media, and general video sharing.",
