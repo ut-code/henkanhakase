@@ -21,6 +21,7 @@ fn check_ffmpeg_license() {
                 "binaries-lgpl を同梱するときは `npm run tauri:build:lgpl` でビルドしてください"
             );
         }
+        check_gpl_ffmpeg();
         return;
     }
 
@@ -40,11 +41,8 @@ fn check_ffmpeg_license() {
     }
 
     let run = |arg: &str| {
-        let output = Command::new(&path)
-            .args(["-hide_banner", arg])
-            .output()
-            .unwrap_or_else(|e| panic!("{} を実行できません: {e}", path.display()));
-        String::from_utf8_lossy(&output.stdout).into_owned()
+        run_ffmpeg(&path, arg)
+            .unwrap_or_else(|e| panic!("{} を実行できません: {e}", path.display()))
     };
     if !run("-L").contains("Lesser General Public License") {
         panic!("{} は LGPL 版ではありません", path.display());
@@ -58,4 +56,68 @@ fn check_ffmpeg_license() {
             path.display()
         );
     }
+}
+
+/// GPL 版として同梱する FFmpeg が `scripts/build-ffmpeg.sh gpl` でビルドしたもの
+/// (GPL-2.0-or-later。FFmpeg-NOTICE.txt の記載と一致する)かを確かめる。
+/// 配布物を作る release ビルドでは止め、開発中の debug ビルドでは警告にとどめる
+fn check_gpl_ffmpeg() {
+    let target = env::var("TARGET").unwrap();
+    let exe = if target.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    let path = Path::new("binaries").join(format!("henkanhakase-ffmpeg-{target}{exe}"));
+    println!("cargo:rerun-if-changed={}", path.display());
+    // 置いていない場合は tauri-build がエラーにする
+    if !path.exists() {
+        return;
+    }
+
+    let release = env::var("PROFILE").as_deref() == Ok("release");
+    let report = |message: String| {
+        if release {
+            panic!("{message}");
+        }
+        println!("cargo:warning={message}");
+    };
+
+    // クロスコンパイルなどで実行できない場合は検証できない
+    let buildconf = match run_ffmpeg(&path, "-buildconf") {
+        Ok(buildconf) => buildconf,
+        Err(e) => {
+            println!(
+                "cargo:warning={} を実行できないため、ライセンスを検証できませんでした: {e}",
+                path.display()
+            );
+            return;
+        }
+    };
+    if !buildconf.contains("--enable-gpl")
+        || ["--enable-version3", "--enable-nonfree"]
+            .iter()
+            .any(|flag| buildconf.contains(flag))
+    {
+        report(format!(
+            "{} は `scripts/build-ffmpeg.sh gpl` でビルドした FFmpeg ではありません(FFmpeg-NOTICE.txt の記載と一致しません)",
+            path.display()
+        ));
+    }
+}
+
+fn run_ffmpeg(path: &Path, arg: &str) -> Result<String, String> {
+    let output = Command::new(path)
+        .args(["-hide_banner", arg])
+        .output()
+        .map_err(|e| e.to_string())?;
+    // 実行できても異常終了した場合(依存ライブラリが足りないなど)は、出力が空でライセンスを誤判定するため失敗にする
+    if !output.status.success() {
+        return Err(format!(
+            "{}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
