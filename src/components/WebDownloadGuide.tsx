@@ -54,9 +54,9 @@ export function WebDownloadGuide({ locale }: { locale: Locale }) {
   return (
     <section
       aria-labelledby="about-henkanhakase"
-      className="border-t border-[#e8ecf4] bg-white px-6 py-16"
+      className="px-12 pb-20 pt-6 max-[980px]:px-5"
     >
-      <div className="mx-auto grid w-full max-w-5xl gap-10 md:grid-cols-[1.2fr_1fr] md:items-center">
+      <div className="mx-auto grid w-full max-w-[1190px] gap-10 md:grid-cols-[1.2fr_1fr] md:items-center">
         <div>
           <p className="text-sm font-bold text-[#586cec]">{text.label}</p>
           <h2
@@ -68,7 +68,7 @@ export function WebDownloadGuide({ locale }: { locale: Locale }) {
           <p className="mt-5 leading-7 text-[#526079]">{text.description}</p>
         </div>
 
-        <div className="rounded-[20px] border border-[#dfe5ff] bg-[#f6f8ff] p-7 shadow-[0_12px_35px_rgba(39,61,98,0.055)]">
+        <div className="rounded-[20px] border border-[#e3e8f1] bg-white/90 p-7 shadow-[0_12px_35px_rgba(39,61,98,0.055)]">
           <h3 className="text-xl font-bold text-[#263143]">
             {text.downloadTitle}
           </h3>
@@ -89,7 +89,7 @@ export function WebDownloadGuide({ locale }: { locale: Locale }) {
         </div>
       </div>
 
-      <div className="mx-auto mt-16 w-full max-w-5xl">
+      <div className="mx-auto mt-16 w-full max-w-[1190px]">
         <h3 className="text-2xl font-bold text-[#263143]">
           {text.benefitsTitle}
         </h3>
@@ -97,7 +97,7 @@ export function WebDownloadGuide({ locale }: { locale: Locale }) {
           {text.benefits.map((benefit, index) => (
             <div
               key={benefit.title}
-              className="rounded-[20px] border border-[#e3e8f1] bg-[#f8faff] p-6"
+              className="rounded-[20px] border border-[#e3e8f1] bg-white/90 p-6 shadow-[0_12px_35px_rgba(39,61,98,0.055)]"
             >
               <span className="text-sm font-bold text-[#586cec]">
                 {String(index + 1).padStart(2, "0")}
@@ -113,7 +113,7 @@ export function WebDownloadGuide({ locale }: { locale: Locale }) {
         </div>
       </div>
 
-      <div className="mx-auto mt-16 w-full max-w-5xl rounded-[28px] border border-[#dfe5ff] bg-[#f6f8ff] p-7 text-[#263143] md:p-10">
+      <div className="mx-auto mt-16 w-full max-w-[1190px] rounded-[20px] border border-[#e3e8f1] bg-white/90 p-7 text-[#263143] shadow-[0_12px_35px_rgba(39,61,98,0.055)] md:p-10">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <h3 className="text-2xl font-bold md:text-3xl">
