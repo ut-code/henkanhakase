@@ -246,7 +246,9 @@ function App() {
       } else if (AUDIO_FORMATS.includes(file.format as AudioFormat)) {
         return [...AUDIO_FORMATS];
       } else {
-        return IMAGE_FORMATS.filter((format) => format !== "HEIC", "SVG");
+        return IMAGE_FORMATS.filter(
+          (format) => !["HEIC", "SVG"].includes(format),
+        );
       }
     };
     // 全てのファイルのavailableFormatsの共通部分を返す
