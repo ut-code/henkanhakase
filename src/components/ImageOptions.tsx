@@ -101,8 +101,8 @@ export function ImageOptions({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <div className="flex justify-between text-[10px] text-[#9aa6b7]">
-            <span>{t("lowCompression")}</span>
-            <span>{t("highCompression")}</span>
+            <span>0({t("lowCompression")})</span>
+            <span>9({t("highCompression")})</span>
           </div>
         </div>
       )}
