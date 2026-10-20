@@ -165,6 +165,13 @@ function buildDefaultArgs(
     args.push("-q:v", String(options.qVWebp));
   }
 
+  // The browser FFmpeg build can otherwise select a grayscale-compatible
+  // pixel format for libwebp. Keep the color channels (and transparency)
+  // explicit for WebP output.
+  if (outputFormat === "WebP") {
+    args.push("-c:v", "libwebp", "-pix_fmt", "yuva420p");
+  }
+
   if (outputFormat === "AVIF") {
     args.push("-c:v", "libaom-av1");
     if (options.avifQuality != null) {

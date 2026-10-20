@@ -1781,8 +1781,8 @@ function App() {
       </footer>
 
       {/* Footer */}
-      <Footer />
       {!isTauri() && <WebDownloadGuide locale={locale} />}
+      <Footer />
 
       {/* Media Modal */}
       <MediaModal
