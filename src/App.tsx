@@ -294,7 +294,9 @@ function App() {
       let dimensions: MediaDimensions;
 
       if (file.format === "SVG") {
-        const svgText = await readTextFile(file.path);
+        const svgText = file.file
+          ? await file.file.text()
+          : await readTextFile(file.path);
         dimensions = parseSvgDimensions(svgText);
       } else if (file.file) {
         dimensions = await probeDimensions(file.file, file.format);

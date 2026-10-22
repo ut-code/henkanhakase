@@ -1,5 +1,6 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
+import { heicTo } from "heic-to";
 import coreURL from "../../node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js?url";
 import wasmURL from "../../node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm?url";
 import {
@@ -45,6 +46,11 @@ export async function probeDimensions(
   file: File,
   format: Format,
 ): Promise<MediaDimensions> {
+  if (format === "HEIC") {
+    const pngBlob = await convertHeicToPng(file);
+    return probeImageBlobDimensions(pngBlob);
+  }
+
   if (
     format === "GIF" ||
     format === "PNG" ||
@@ -52,8 +58,7 @@ export async function probeDimensions(
     format === "WebP" ||
     format === "BMP" ||
     format === "ICO" ||
-    format === "AVIF" ||
-    format === "HEIC"
+    format === "AVIF"
   ) {
     const url = URL.createObjectURL(file);
     try {
@@ -76,6 +81,18 @@ export async function probeDimensions(
       video.onerror = () => reject(new Error("Video metadata load failed"));
     });
     return { width: video.videoWidth, height: video.videoHeight };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function probeImageBlobDimensions(blob: Blob): Promise<MediaDimensions> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    return { width: image.naturalWidth, height: image.naturalHeight };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -125,11 +142,43 @@ export async function convertBrowserFile(
   outputFormat: Format,
   options: BrowserConversionOptions = {},
 ): Promise<Blob> {
+  if (inputFormat === "SVG") {
+    const pngBlob = await convertImageToPng(file, options);
+    if (outputFormat === "PNG") {
+      return pngBlob;
+    }
+
+    const pngFile = new File([pngBlob], "rasterized.png", {
+      type: "image/png",
+    });
+    return convertBrowserFile(pngFile, "PNG", outputFormat, {
+      ...options,
+      width: undefined,
+      height: undefined,
+    });
+  }
+
   if (
     outputFormat === "AVIF" &&
     IMAGE_FORMATS.includes(inputFormat as ImageFormat)
   ) {
+    if (inputFormat === "HEIC") {
+      const pngBlob = await convertHeicToPng(file);
+      return convertImageToAvif(pngBlob, options);
+    }
     return convertImageToAvif(file, options);
+  }
+
+  if (inputFormat === "HEIC") {
+    const pngBlob = await convertHeicToPng(file);
+    if (outputFormat === "PNG") {
+      return pngBlob;
+    }
+
+    const pngFile = new File([pngBlob], "decoded.png", {
+      type: "image/png",
+    });
+    return convertBrowserFile(pngFile, "PNG", outputFormat, options);
   }
 
   if (inputFormat === "AVIF") {
@@ -187,21 +236,28 @@ export async function convertBrowserFile(
 }
 
 async function convertImageToAvif(
-  file: File,
+  file: Blob,
   options: BrowserConversionOptions = {},
 ): Promise<Blob> {
   return convertImageToCanvasFormat(file, "image/avif", options);
 }
 
 async function convertImageToPng(
-  file: File,
+  file: Blob,
   options: BrowserConversionOptions = {},
 ): Promise<Blob> {
   return convertImageToCanvasFormat(file, "image/png", options);
 }
 
+async function convertHeicToPng(file: File): Promise<Blob> {
+  return heicTo({
+    blob: file,
+    type: "image/png",
+  });
+}
+
 async function convertImageToCanvasFormat(
-  file: File,
+  file: Blob,
   mimeType: "image/avif" | "image/png",
   options: BrowserConversionOptions,
 ): Promise<Blob> {
