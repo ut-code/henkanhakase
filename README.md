@@ -9,6 +9,102 @@
 - フレームワーク: [Tauri](https://v2.tauri.app/ja/develop/)
 - ツール: [FFmpeg](https://ffmpeg.org/)
 
+## 変換の流れ
+
+### デスクトップ版
+```mermaid
+flowchart TB
+  subgraph IN[入力形式]
+    direction LR
+    I_RASTER[PNG / JPEG / WebP / GIF / BMP / ICO / AVIF]
+    I_HEIC[HEIC]
+    I_SVG[SVG]
+    I_VIDEO[MP4 / WebM / AVI / MOV]
+    I_AUDIO[MP3 / M4A / AAC / WAV / AIFF / FLAC / WMA / OGG / OPUS]
+  end
+  subgraph CONV[変換方法]
+    direction LR
+    FFMPEG[同梱 FFmpeg バイナリ]
+    HEIC["heif-oxide + image<br/>HEIC 専用変換"]
+    SVG["resvg + usvg<br/>SVG → PNG"]
+    PDF[PNG バイト列 → jsPDF]
+  end
+  subgraph OUT[出力形式]
+    direction LR
+    O_IMAGE[PNG / JPEG / WebP / GIF / BMP / ICO / AVIF]
+    O_PDF[PDF]
+    O_VIDEO[MP4 / WebM / AVI / MOV]
+    O_AUDIO[MP3 / M4A / AAC / WAV / AIFF / FLAC / WMA / OGG / OPUS]
+  end
+  I_RASTER --> FFMPEG
+  I_VIDEO --> FFMPEG
+  I_AUDIO --> FFMPEG
+  I_HEIC -->|PNG / JPEG / WebP| HEIC
+  I_HEIC -->|その他の出力: 先に PNG 化| HEIC
+  I_SVG --> SVG
+  SVG -->|PNG 中間ファイル| FFMPEG
+  HEIC -->|PNG / JPEG / WebP| O_IMAGE
+  HEIC -->|PNG 中間ファイル| FFMPEG
+  FFMPEG --> O_IMAGE
+  FFMPEG --> O_VIDEO
+  FFMPEG --> O_AUDIO
+  I_RASTER -->|PDF 選択時: 先に PNG 化| FFMPEG
+  I_SVG -->|PDF 選択時| SVG
+  SVG -->|PNG バイト列| PDF
+  FFMPEG -->|PDF 選択時: PNG バイト列| PDF
+  PDF --> O_PDF
+```
+
+### ブラウザ版
+```mermaid
+flowchart TB
+  subgraph IN[入力形式]
+    direction LR
+    I_RASTER[PNG / JPEG / WebP / GIF / BMP / ICO]
+    I_AVIF[AVIF]
+    I_HEIC[HEIC]
+    I_SVG[SVG]
+    I_VIDEO[MP4 / WebM / AVI / MOV]
+    I_AUDIO[MP3 / M4A / AAC / WAV / AIFF / FLAC / WMA / OGG / OPUS]
+  end
+  subgraph CONV[変換方法]
+    direction LR
+    CORE["@ffmpeg/core<br/>WebAssembly"]
+    CANVAS["ブラウザ Image + Canvas<br/>PNG / AVIF エンコード"]
+    HEIC["heic-to<br/>HEIC → PNG"]
+    PDF["jsPDF<br/>PNG → PDF"]
+  end
+  subgraph OUT[出力形式]
+    direction LR
+    O_IMAGE[PNG / JPEG / WebP / GIF / BMP / ICO / AVIF]
+    O_VIDEO[MP4 / WebM / AVI / MOV]
+    O_AUDIO[MP3 / M4A / AAC / WAV / AIFF / FLAC / WMA / OGG / OPUS]
+    O_PDF[PDF]
+  end
+  I_RASTER --> CORE
+  I_VIDEO --> CORE
+  I_AUDIO --> CORE
+  I_AVIF -->|先に PNG 化| CANVAS
+  I_HEIC --> HEIC
+  I_SVG -->|先に PNG 化| CANVAS
+  HEIC -->|通常変換: PNG 中間| CORE
+  HEIC -->|AVIF 出力| CANVAS
+  CANVAS -->|PNG 中間| CORE
+  CORE --> O_IMAGE
+  CORE --> O_VIDEO
+  CORE --> O_AUDIO
+  CANVAS -->|AVIF を直接生成| O_IMAGE
+  I_RASTER -->|PDF 選択時: 先に PNG 化| CORE
+  I_AVIF -->|PDF 選択時| CANVAS
+  I_HEIC -->|PDF 選択時| HEIC
+  I_SVG -->|PDF 選択時| CANVAS
+  CORE -->|PNG バイト列| PDF
+  CANVAS -->|PNG バイト列| PDF
+  HEIC -->|PNG バイト列| PDF
+  PDF --> O_PDF
+```
+
+
 ## ディレクトリ構成
 
 ### 追跡ディレクトリ
