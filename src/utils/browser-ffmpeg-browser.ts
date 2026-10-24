@@ -217,7 +217,10 @@ export async function convertBrowserFile(
       outputFormat,
       options,
     );
-    await instance.exec(args);
+    const exitCode = await instance.exec(args);
+    if (exitCode !== 0) {
+      throw new Error(`Browser FFmpeg failed with exit code ${exitCode}`);
+    }
 
     // Rust: 出力ファイルの存在確認後にパスを返す処理に対応。
     const output = await instance.readFile(outputName);
@@ -228,6 +231,9 @@ export async function convertBrowserFile(
     return new Blob([output as BlobPart], {
       type: fileTypeForFormat(outputFormat),
     });
+  } catch (error) {
+    cancelBrowserFfmpeg();
+    throw error;
   } finally {
     // Rust: TempFile の Drop による失敗・キャンセル時の後始末に対応。
     await instance.deleteFile(inputName).catch(() => {});

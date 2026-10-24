@@ -1568,8 +1568,8 @@ function App() {
                                 </div>
                               </>
                             ) : (
-                              <div className="truncate text-left flex-1 min-w-0">
-                                <span className="text-[#d76269] block truncate">
+                              <div className="text-left flex-1 min-w-0">
+                                <span className="text-[#d76269] block">
                                   ✕ {res.sourceName}: {res.error}
                                 </span>
                               </div>

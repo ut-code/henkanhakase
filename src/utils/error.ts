@@ -22,7 +22,9 @@ export function apiErrorMessage(error: unknown, t: Translation): string {
   } as const;
   if (typeof code === "string" && code in errorKeys)
     return t(errorKeys[code as keyof typeof errorKeys]);
-  return t("error_unexpected");
+
+  const detail = errorDetail(value);
+  return detail ? `${t("error_unexpected")}: ${detail}` : t("error_unexpected");
 }
 
 function tryParseError(error: string): unknown {
@@ -31,4 +33,29 @@ function tryParseError(error: string): unknown {
   } catch {
     return error;
   }
+}
+
+function errorDetail(error: unknown): string | null {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    if ("message" in error && typeof error.message === "string") {
+      return error.message;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return null;
+    }
+  }
+
+  if (error == null) return null;
+  return String(error);
 }
