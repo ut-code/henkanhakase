@@ -1,8 +1,22 @@
+import { isTauri } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useState } from "react";
 import Logo from "../assets/logo.svg";
 import { useTranslation } from "../i18n";
 import { readLicense } from "../license-links";
 import { LicenseViewer } from "./LicenseViewer";
+
+const FEEDBACK_FORM_URL =
+  "https://docs.google.com/forms/d/e/1FAIpQLSc-ICMvdBiBDUwV97ED9GOpwGqRcL1If1W17Ca_j7VQuYt40g/viewform";
+
+// デスクトップ版では WebView 内で遷移しないよう、既定のブラウザで開く。
+const openFeedbackForm = () => {
+  if (isTauri()) {
+    void openUrl(FEEDBACK_FORM_URL);
+  } else {
+    window.open(FEEDBACK_FORM_URL, "_blank", "noopener,noreferrer");
+  }
+};
 
 export default function Footer() {
   const { t } = useTranslation();
@@ -85,6 +99,13 @@ export default function Footer() {
               className="cursor-pointer text-white hover:underline"
             >
               {t("thirdPartyLicenses")}
+            </button>
+            <button
+              type="button"
+              onClick={openFeedbackForm}
+              className="cursor-pointer text-white hover:underline"
+            >
+              {t("feedback")}
             </button>
           </div>
         </div>
