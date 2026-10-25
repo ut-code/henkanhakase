@@ -78,7 +78,7 @@ function isAllowedLicense(dep: Dependency): boolean {
   // ブラウザ版では GPL-2.0-or-later も許可する。
   const allowedLicenses =
     process.env.npm_lifecycle_event === "build:web"
-      ? "(MIT OR MIT-0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR BSD-2-Clause OR BSD-3-Clause OR 0BSD OR ISC OR Zlib OR Unicode-3.0 OR Unlicense OR CC0-1.0 OR MPL-2.0 OR GPL-2.0-or-later)"
+      ? "(MIT OR MIT-0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR BSD-2-Clause OR BSD-3-Clause OR 0BSD OR ISC OR Zlib OR Unicode-3.0 OR Unlicense OR CC0-1.0 OR MPL-2.0 OR GPL-2.0-or-later OR LGPL-3.0)"
       : ALLOWED_LICENSES;
 
   try {
