@@ -331,7 +331,6 @@ build "libogg-$LIBOGG_VERSION" "libogg-$LIBOGG_VERSION.tar.gz" build_libogg
 build "libvorbis-$LIBVORBIS_VERSION" "libvorbis-$LIBVORBIS_VERSION.tar.gz" build_libvorbis
 build "libwebp-$LIBWEBP_VERSION" "libwebp-$LIBWEBP_VERSION.tar.gz" build_libwebp
 
-```bash
 # Opus の pkg-config 検出確認
 log "Opus pkg-config の検証"
 
@@ -359,7 +358,6 @@ else
   pkg-config --debug --exists opus 2>&1 || true
   exit 1
 fi
-```
 
 # ------------------------------------------------------------
 # FFmpeg
