@@ -291,9 +291,17 @@ build_lame() {
 # Opus (BSD-3-Clause)
 build_opus() {
   local args=("${CONFIGURE_ARGS[@]}" --disable-doc --disable-extra-programs)
-  # MinGW では _FORTIFY_SOURCE が libssp を必要とし、静的リンクに失敗するため無効にする
-  [[ "$OS" == "windows" ]] && args+=(--disable-stack-protector)
-  ./configure "${args[@]}"
+
+  if [[ "$OS" == "windows" ]]; then
+    # Stack protector を無効化
+    args+=(--disable-stack-protector)
+
+    # MinGW の _FORTIFY_SOURCE による未解決シンボルを防ぐ
+    CPPFLAGS="$CPPFLAGS -U_FORTIFY_SOURCE" ./configure "${args[@]}"
+  else
+    ./configure "${args[@]}"
+  fi
+
   make -j"$JOBS"
   make install
 }
