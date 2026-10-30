@@ -190,7 +190,7 @@ for entry in "${SOURCES[@]}"; do
   SOURCE_FILES+=("$file")
   if [[ ! -f "$DOWNLOAD_DIR/$file" ]]; then
     log "ダウンロード: $file"
-    curl -fL --retry 3 -o "$DOWNLOAD_DIR/$file.part" "$url"
+    curl --fail --location --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 30 --max-time 300 -o "$DOWNLOAD_DIR/$file.part" "$url"
     mv "$DOWNLOAD_DIR/$file.part" "$DOWNLOAD_DIR/$file"
   fi
   # 改ざんされたソースを同梱するバイナリや配布するソースに混ぜないよう、取得済みのものも毎回確かめる
