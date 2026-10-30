@@ -331,6 +331,24 @@ build "libogg-$LIBOGG_VERSION" "libogg-$LIBOGG_VERSION.tar.gz" build_libogg
 build "libvorbis-$LIBVORBIS_VERSION" "libvorbis-$LIBVORBIS_VERSION.tar.gz" build_libvorbis
 build "libwebp-$LIBWEBP_VERSION" "libwebp-$LIBWEBP_VERSION.tar.gz" build_libwebp
 
+# Opus の pkg-config 検出確認
+log "Opus pkg-config の検証"
+
+echo "PKG_CONFIG_LIBDIR=$PKG_CONFIG_LIBDIR"
+
+echo "=== opus.pc の検索 ==="
+find "$PREFIX" -name "opus.pc" -print
+
+echo "=== pkg-config による検出 ==="
+if pkg-config --exists opus; then
+  echo "Opus version: $(pkg-config --modversion opus)"
+  echo "Opus flags: $(pkg-config --static --cflags --libs opus)"
+else
+  echo "ERROR: pkg-config で Opus を検出できません"
+  pkg-config --debug --exists opus 2>&1 || true
+  exit 1
+fi
+
 # ------------------------------------------------------------
 # FFmpeg
 # ------------------------------------------------------------
