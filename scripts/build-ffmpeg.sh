@@ -293,11 +293,9 @@ build_opus() {
   local args=("${CONFIGURE_ARGS[@]}" --disable-doc --disable-extra-programs)
 
   if [[ "$OS" == "windows" ]]; then
-    # Stack protector を無効化
     args+=(--disable-stack-protector)
 
-    # MinGW の _FORTIFY_SOURCE による未解決シンボルを防ぐ
-    CPPFLAGS="$CPPFLAGS -U_FORTIFY_SOURCE" ./configure "${args[@]}"
+    CPPFLAGS="$CPPFLAGS -D_FORTIFY_SOURCE=0" ./configure "${args[@]}"
   else
     ./configure "${args[@]}"
   fi
