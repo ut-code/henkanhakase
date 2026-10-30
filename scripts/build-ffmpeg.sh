@@ -331,13 +331,24 @@ build "libogg-$LIBOGG_VERSION" "libogg-$LIBOGG_VERSION.tar.gz" build_libogg
 build "libvorbis-$LIBVORBIS_VERSION" "libvorbis-$LIBVORBIS_VERSION.tar.gz" build_libvorbis
 build "libwebp-$LIBWEBP_VERSION" "libwebp-$LIBWEBP_VERSION.tar.gz" build_libwebp
 
+```bash
 # Opus の pkg-config 検出確認
 log "Opus pkg-config の検証"
+
+# pkg-config に依存ライブラリのインストール先を明示
+export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
+unset PKG_CONFIG_PATH
 
 echo "PKG_CONFIG_LIBDIR=$PKG_CONFIG_LIBDIR"
 
 echo "=== opus.pc の検索 ==="
-find "$PREFIX" -name "opus.pc" -print
+if [[ -f "$PREFIX/lib/pkgconfig/opus.pc" ]]; then
+  echo "opus.pc exists: $PREFIX/lib/pkgconfig/opus.pc"
+else
+  echo "ERROR: opus.pc not found"
+  find "$PREFIX" -name "opus.pc" -print
+  exit 1
+fi
 
 echo "=== pkg-config による検出 ==="
 if pkg-config --exists opus; then
@@ -348,6 +359,7 @@ else
   pkg-config --debug --exists opus 2>&1 || true
   exit 1
 fi
+```
 
 # ------------------------------------------------------------
 # FFmpeg
@@ -393,7 +405,24 @@ FFMPEG_ARGS+=(--extra-ldflags="$FFMPEG_LDFLAGS")
 log "ビルド: FFmpeg $FFMPEG_VERSION ($LICENSE, $TARGET)"
 (
   unpack "ffmpeg-$FFMPEG_VERSION.tar.xz"
-  ./configure "${FFMPEG_ARGS[@]}"
+  if ./configure "${FFMPEG_ARGS[@]}"; then
+    log "FFmpeg configure 成功"
+  else
+    echo "=== FFmpeg configure 失敗: Opus 関連ログ ==="
+
+    if [[ -f ffbuild/config.log ]]; then
+      grep -n -B 20 -A 40 \
+        -E 'opus_multistream|test_pkg_config libopus|ERROR: opus' \
+        ffbuild/config.log || true
+
+      echo "=== config.log の末尾 ==="
+      tail -n 100 ffbuild/config.log
+    else
+      echo "ffbuild/config.log が見つかりません"
+    fi
+
+    exit 1
+  fi
   make -j"$JOBS"
 )
 FFMPEG_BIN="$SRC_DIR/ffmpeg-$FFMPEG_VERSION/ffmpeg$EXE"
