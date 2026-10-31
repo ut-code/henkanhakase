@@ -322,11 +322,11 @@ jobs:
           draft: true
           generate_release_notes: true
           fail_on_unmatched_files: true
-        files: |
-          release-assets/bundles/**/*.AppImage
-          release-assets/bundles/**/*.deb
-          release-assets/bundles/**/*.rpm
-          release-assets/bundles/**/*.exe
-          release-assets/bundles/**/*.msi
-          release-assets/bundles/**/*.dmg
-          release-assets/ffmpeg-source/*.tar.gz
+          files: |
+            release-assets/bundles/**/*.AppImage
+            release-assets/bundles/**/*.deb
+            release-assets/bundles/**/*.rpm
+            release-assets/bundles/**/*.exe
+            release-assets/bundles/**/*.msi
+            release-assets/bundles/**/*.dmg
+            release-assets/ffmpeg-source/*.tar.gz
