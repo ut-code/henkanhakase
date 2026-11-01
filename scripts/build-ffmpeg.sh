@@ -190,7 +190,7 @@ for entry in "${SOURCES[@]}"; do
   SOURCE_FILES+=("$file")
   if [[ ! -f "$DOWNLOAD_DIR/$file" ]]; then
     log "ダウンロード: $file"
-    curl -fL --retry 3 -o "$DOWNLOAD_DIR/$file.part" "$url"
+    curl --fail --location --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 30 --max-time 300 -o "$DOWNLOAD_DIR/$file.part" "$url"
     mv "$DOWNLOAD_DIR/$file.part" "$DOWNLOAD_DIR/$file"
   fi
   # 改ざんされたソースを同梱するバイナリや配布するソースに混ぜないよう、取得済みのものも毎回確かめる
@@ -291,9 +291,15 @@ build_lame() {
 # Opus (BSD-3-Clause)
 build_opus() {
   local args=("${CONFIGURE_ARGS[@]}" --disable-doc --disable-extra-programs)
-  # MinGW では _FORTIFY_SOURCE が libssp を必要とし、静的リンクに失敗するため無効にする
-  [[ "$OS" == "windows" ]] && args+=(--disable-stack-protector)
-  ./configure "${args[@]}"
+
+  if [[ "$OS" == "windows" ]]; then
+    args+=(--disable-stack-protector)
+
+    CPPFLAGS="$CPPFLAGS -D_FORTIFY_SOURCE=0" ./configure "${args[@]}"
+  else
+    ./configure "${args[@]}"
+  fi
+
   make -j"$JOBS"
   make install
 }
@@ -330,6 +336,34 @@ build "opus-$OPUS_VERSION" "opus-$OPUS_VERSION.tar.gz" build_opus
 build "libogg-$LIBOGG_VERSION" "libogg-$LIBOGG_VERSION.tar.gz" build_libogg
 build "libvorbis-$LIBVORBIS_VERSION" "libvorbis-$LIBVORBIS_VERSION.tar.gz" build_libvorbis
 build "libwebp-$LIBWEBP_VERSION" "libwebp-$LIBWEBP_VERSION.tar.gz" build_libwebp
+
+# Opus の pkg-config 検出確認
+log "Opus pkg-config の検証"
+
+# pkg-config に依存ライブラリのインストール先を明示
+export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
+unset PKG_CONFIG_PATH
+
+echo "PKG_CONFIG_LIBDIR=$PKG_CONFIG_LIBDIR"
+
+echo "=== opus.pc の検索 ==="
+if [[ -f "$PREFIX/lib/pkgconfig/opus.pc" ]]; then
+  echo "opus.pc exists: $PREFIX/lib/pkgconfig/opus.pc"
+else
+  echo "ERROR: opus.pc not found"
+  find "$PREFIX" -name "opus.pc" -print
+  exit 1
+fi
+
+echo "=== pkg-config による検出 ==="
+if pkg-config --exists opus; then
+  echo "Opus version: $(pkg-config --modversion opus)"
+  echo "Opus flags: $(pkg-config --static --cflags --libs opus)"
+else
+  echo "ERROR: pkg-config で Opus を検出できません"
+  pkg-config --debug --exists opus 2>&1 || true
+  exit 1
+fi
 
 # ------------------------------------------------------------
 # FFmpeg
@@ -375,7 +409,24 @@ FFMPEG_ARGS+=(--extra-ldflags="$FFMPEG_LDFLAGS")
 log "ビルド: FFmpeg $FFMPEG_VERSION ($LICENSE, $TARGET)"
 (
   unpack "ffmpeg-$FFMPEG_VERSION.tar.xz"
-  ./configure "${FFMPEG_ARGS[@]}"
+  if ./configure "${FFMPEG_ARGS[@]}"; then
+    log "FFmpeg configure 成功"
+  else
+    echo "=== FFmpeg configure 失敗: Opus 関連ログ ==="
+
+    if [[ -f ffbuild/config.log ]]; then
+      grep -n -B 20 -A 40 \
+        -E 'opus_multistream|test_pkg_config libopus|ERROR: opus' \
+        ffbuild/config.log || true
+
+      echo "=== config.log の末尾 ==="
+      tail -n 100 ffbuild/config.log
+    else
+      echo "ffbuild/config.log が見つかりません"
+    fi
+
+    exit 1
+  fi
   make -j"$JOBS"
 )
 FFMPEG_BIN="$SRC_DIR/ffmpeg-$FFMPEG_VERSION/ffmpeg$EXE"

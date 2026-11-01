@@ -1,0 +1,335 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  # バージョン確認とRust依存ライブラリのライセンス一覧を生成
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Validate version
+        shell: bash
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          TAURI_VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          CARGO_VERSION=$(grep -m1 '^version = ' src-tauri/Cargo.toml | cut -d '"' -f2)
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+
+          echo "Tag:     $TAG_VERSION"
+          echo "Package: $PACKAGE_VERSION"
+          echo "Tauri:   $TAURI_VERSION"
+          echo "Cargo:   $CARGO_VERSION"
+
+          test "$TAG_VERSION" = "$PACKAGE_VERSION"
+          test "$TAG_VERSION" = "$TAURI_VERSION"
+          test "$TAG_VERSION" = "$CARGO_VERSION"
+
+      - name: Install cargo-about
+        run: cargo install --locked cargo-about --features cli
+
+      - name: Generate Rust license list
+        run: npm run licenses
+
+      - name: Upload Rust license list
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-licenses
+          path: src-tauri/licenses/THIRD_PARTY_LICENSES_RUST.txt
+          if-no-files-found: error
+
+  # Linux版とWindows版のFFmpegをビルド
+  build-ffmpeg:
+    name: Build FFmpeg (Linux and Windows)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache FFmpeg build dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/ffmpeg-build
+          key: ffmpeg-linux-x64-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+
+      - name: Install FFmpeg build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            cmake \
+            nasm \
+            curl \
+            mingw-w64
+
+      - name: Build Linux FFmpeg
+        run: bash scripts/build-ffmpeg.sh gpl
+
+      - name: Build Windows FFmpeg
+        run: bash scripts/build-ffmpeg.sh gpl windows
+
+      - name: Upload FFmpeg binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-binaries
+          path: src-tauri/binaries/henkanhakase-ffmpeg-*
+          if-no-files-found: error
+
+      - name: Upload FFmpeg source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-source
+          path: ~/ffmpeg-build/out/ffmpeg-gpl-*-src.tar.gz
+          if-no-files-found: error
+
+      - name: Upload FFmpeg license notices
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-notices
+          path: src-tauri/licenses/FFmpeg-LIBRARIES.txt
+          if-no-files-found: error
+
+  # Linux版アプリ
+  build-linux:
+    name: Build Linux
+    needs: [prepare, build-ffmpeg]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libxdo-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libwebkit2gtk-4.1-dev
+
+      - name: Download FFmpeg binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-binaries
+          path: src-tauri/binaries
+
+      - name: Download FFmpeg license notices
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-notices
+          path: src-tauri/licenses
+
+      - name: Download Rust license list
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-licenses
+          path: src-tauri/licenses
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri app
+        run: npm run tauri build
+
+      - name: Upload Linux bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-linux
+          path: |
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.rpm
+          if-no-files-found: error
+
+  # Windows版アプリ
+  build-windows:
+    name: Build Windows
+    needs: [prepare, build-ffmpeg]
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Download FFmpeg binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-binaries
+          path: src-tauri/binaries
+
+      - name: Download FFmpeg license notices
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-notices
+          path: src-tauri/licenses
+
+      - name: Download Rust license list
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-licenses
+          path: src-tauri/licenses
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri app
+        run: npm run tauri build
+
+      - name: Upload Windows bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-windows
+          path: |
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
+          if-no-files-found: error
+
+  # macOS版アプリ。IntelとApple Siliconを別々にビルド
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    needs: prepare
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: macos-15-intel
+          - arch: arm64
+            runner: macos-15
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache FFmpeg build dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/ffmpeg-build
+          key: ffmpeg-macos-${{ matrix.arch }}-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+
+      - name: Install FFmpeg build dependencies
+        run: brew install pkg-config cmake nasm
+
+      - name: Build macOS FFmpeg
+        run: bash scripts/build-ffmpeg.sh gpl
+
+      - name: Download Rust license list
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-licenses
+          path: src-tauri/licenses
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri app
+        run: npm run tauri build
+
+      - name: Upload macOS bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-macos-${{ matrix.arch }}
+          path: src-tauri/target/release/bundle/**/*.dmg
+          if-no-files-found: error
+
+  # 全OSの成果物を集めてGitHub Releaseを作成
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - build-linux
+      - build-windows
+      - build-macos
+      - build-ffmpeg
+
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download application bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*
+          path: release-assets/bundles
+          merge-multiple: false
+
+      - name: Download FFmpeg source archive
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-source
+          path: release-assets/ffmpeg-source
+
+      - name: Publish draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: henkanhakase ${{ github.ref_name }}
+          draft: true
+          body_path: RELEASE_NOTES.md
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/bundles/**/*.AppImage
+            release-assets/bundles/**/*.deb
+            release-assets/bundles/**/*.rpm
+            release-assets/bundles/**/*.exe
+            release-assets/bundles/**/*.msi
+            release-assets/bundles/**/*.dmg
+            release-assets/ffmpeg-source/*.tar.gz
