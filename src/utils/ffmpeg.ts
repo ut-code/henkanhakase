@@ -369,7 +369,7 @@ function appendVideoOutputOptions(
       args.push("-c:v", "libx264", "-pix_fmt", "yuv420p");
       break;
     case "WebM":
-      args.push("-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p");
+      args.push("-c:v", "libvpx", "-c:a", "libvorbis", "-auto-alt-ref", "0");
       break;
     case "AVI":
       args.push("-c:v", "mpeg4");
