@@ -124,28 +124,25 @@ export function VideoOptions({
               htmlFor="video-loop-count"
               className="font-semibold text-[#415166]"
             >
-              ループ再生回数
+              {t("loopCount")}
             </label>
             <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
-              {loopCount} 回
+              {t("loopCountUnit", { count: loopCount })}
             </span>
           </div>
           <input
-            type="number"
+            type="range"
             id="video-loop-count"
             min="1"
             max="20"
             value={loopCount}
-            onChange={(e) => {
-              const val = Number.parseInt(e.target.value, 10);
-              if (!Number.isNaN(val)) {
-                onLoopCountChange(Math.min(Math.max(val, 1), 20));
-              }
-            }}
-            className="h-8 w-full rounded-md border border-[#dfe5ef] bg-white px-2.5 text-xs text-[#263143] focus:border-[#586cec] focus:outline-none"
+            onChange={(e) =>
+              onLoopCountChange(Number.parseInt(e.target.value, 10))
+            }
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8f1] accent-[#586cec]"
           />
           <span className="text-[10px] text-[#9aa6b7]">
-            ※1〜20回で指定できます
+            {t("loopCountHint")}
           </span>
         </div>
       )}
