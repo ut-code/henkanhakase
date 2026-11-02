@@ -138,9 +138,18 @@ pub async fn convert(
             (input_path.clone(), request.input_format, None)
         };
 
-    let duration_ms = request
+    let mut duration_ms = request
         .duration_ms
         .or(probe_duration_ms(app, &effective_input_path).await);
+
+    // ★ 追加: GIFから動画への変換時、ループ回数が指定されていれば総再生時間を補正する
+    if request.input_format == FileFormat::Gif && request.output_format.is_video() {
+        if let Some(loop_count) = request.options.loop_count {
+            if let Some(dur) = duration_ms {
+                duration_ms = Some(dur * loop_count as u64);
+            }
+        }
+    }
 
     let args = ffmpeg::build_args(
         &effective_input_path,

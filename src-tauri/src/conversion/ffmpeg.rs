@@ -479,7 +479,18 @@ fn build_gif_to_video_args(
     output_format: FileFormat,
     options: &ConversionOptions,
 ) -> Vec<String> {
-    let mut args = vec!["-y".into(), "-i".into(), path_to_string(input_path)];
+    let mut args = vec!["-y".into()];
+
+    // -stream_loop は -i より前に挿入する必要がある
+    if let Some(loop_count) = options.loop_count {
+        if loop_count > 1 {
+            // 再生回数 N 回に対して「追加ループ回数」は (N - 1)
+            args.extend(["-stream_loop".into(), (loop_count - 1).to_string()]);
+        }
+    }
+
+    // 入力ファイル指定
+    args.extend(["-i".into(), path_to_string(input_path)]);
 
     if let Some(scale) = build_scale_filter(
         options.width,

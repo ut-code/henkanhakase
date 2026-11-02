@@ -9,6 +9,10 @@ export type VideoOptionsProps = {
   onWebmCrfChange: (value: number) => void;
   aviQV: number;
   onAviQVChange: (value: number) => void;
+  // ★ 追加: ループ回数用 Props
+  loopCount: number;
+  onLoopCountChange: (value: number) => void;
+  isGifSource?: boolean; // GIFからの変換時のみ表示したい場合
 };
 
 export function VideoOptions({
@@ -19,10 +23,15 @@ export function VideoOptions({
   onWebmCrfChange,
   aviQV,
   onAviQVChange,
+  loopCount,
+  onLoopCountChange,
+  isGifSource = true,
 }: VideoOptionsProps) {
   const { t } = useTranslation();
+
   return (
     <div className="flex flex-wrap items-center gap-6">
+      {/* 既存: MP4 / MOV画質設定 */}
       {(format === "MP4" || format === "MOV") && (
         <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
           <div className="flex items-center justify-between text-xs">
@@ -50,6 +59,8 @@ export function VideoOptions({
           </div>
         </div>
       )}
+
+      {/* 既存: WebM画質設定 */}
       {format === "WebM" && (
         <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
           <div className="flex items-center justify-between text-xs">
@@ -77,6 +88,8 @@ export function VideoOptions({
           </div>
         </div>
       )}
+
+      {/* 既存: AVI画質設定 */}
       {format === "AVI" && (
         <div className="flex min-w-55 flex-1 max-w-sm flex-col gap-1.5">
           <div className="flex items-center justify-between text-xs">
@@ -100,6 +113,40 @@ export function VideoOptions({
             <span>{t("rangeHighQuality", { value: 1 })}</span>
             <span>{t("rangeLowQuality", { value: 31 })}</span>
           </div>
+        </div>
+      )}
+
+      {/* ★ 追加: ループ回数の設定項目 (GIF入力時などに表示) */}
+      {isGifSource && (
+        <div className="flex min-w-48 flex-1 max-w-xs flex-col gap-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <label
+              htmlFor="video-loop-count"
+              className="font-semibold text-[#415166]"
+            >
+              ループ再生回数
+            </label>
+            <span className="rounded bg-[#eef1ff] px-2 py-0.5 font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold text-[#586cec]">
+              {loopCount} 回
+            </span>
+          </div>
+          <input
+            type="number"
+            id="video-loop-count"
+            min="1"
+            max="20"
+            value={loopCount}
+            onChange={(e) => {
+              const val = Number.parseInt(e.target.value, 10);
+              if (!Number.isNaN(val)) {
+                onLoopCountChange(Math.min(Math.max(val, 1), 20));
+              }
+            }}
+            className="h-8 w-full rounded-md border border-[#dfe5ef] bg-white px-2.5 text-xs text-[#263143] focus:border-[#586cec] focus:outline-none"
+          />
+          <span className="text-[10px] text-[#9aa6b7]">
+            ※1〜20回で指定できます
+          </span>
         </div>
       )}
     </div>
