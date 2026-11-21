@@ -25,6 +25,7 @@ export type ConversionOptions = {
   qVAvi?: number;
   bmpBitDepth?: number;
   bmpCompression?: boolean;
+  loopCount?: number;
   icoSizes?: number[];
   icoFitMode?: "pad" | "square";
   audio?: {
@@ -317,7 +318,15 @@ function buildGifToVideoArgs(
   outputFormat: VideoFormat,
   options: ConversionOptions,
 ): string[] {
-  const args = ["-y", "-i", inputPath];
+  const args = ["-y"];
+
+  // ★ 追加: -stream_loop は -i の前に配置する
+  if (options.loopCount != null && options.loopCount > 1) {
+    args.push("-stream_loop", String(options.loopCount - 1));
+  }
+
+  args.push("-i", inputPath);
+
   const scaleFilter = buildScaleFilter(
     options.width,
     options.height,

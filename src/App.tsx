@@ -160,6 +160,7 @@ function App() {
   const [avifSpeed, setAvifSpeed] = useState<number>(6);
   const [gifFPS, setGifFPS] = useState<number>(15);
   const [gifMaxColors, setGifMaxColors] = useState<number>(256);
+  const [videoLoopCount, setVideoLoopCount] = useState<number>(1);
   const [bmpBitDepth, setBmpBitDepth] = useState<number>(24);
   const [bmpCompression, setBmpCompression] = useState<boolean>(false);
   const [pdfOptions, setPdfOptions] = useState<PdfConversionOptions>({
@@ -231,6 +232,7 @@ function App() {
     videoCrf,
     webmCrf,
     aviQV,
+    videoLoopCount,
     audioCompression,
   });
   const conversionSettingsChanged =
@@ -588,16 +590,19 @@ function App() {
         return {
           ...resizeOptions,
           crf: videoCrf,
+          loopCount: videoLoopCount,
         };
       case "WebM":
         return {
           ...resizeOptions,
           crfVp9: webmCrf,
+          loopCount: videoLoopCount,
         };
       case "AVI":
         return {
           ...resizeOptions,
           qVAvi: aviQV,
+          loopCount: videoLoopCount,
         };
       default:
         if (isAudioFormat(convertedFormat)) {
@@ -1773,6 +1778,9 @@ function App() {
                     onWebmCrfChange={setWebmCrf}
                     aviQV={aviQV}
                     onAviQVChange={setAviQV}
+                    loopCount={videoLoopCount}
+                    onLoopCountChange={setVideoLoopCount}
+                    isGifSource={sourceFiles[0]?.format === "GIF"}
                   />
                 )}
               </div>

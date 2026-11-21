@@ -274,6 +274,10 @@ pub struct ConversionOptions {
     pub bmp_bit_depth: Option<u32>,
     pub bmp_compression: Option<bool>,
 
+    // ループ回数
+    #[serde(alias = "loop")]
+    pub loop_count: Option<u32>,
+
     /// ICO 形式専用オプション
     pub ico_sizes: Option<Vec<u32>>,
     pub ico_fit_mode: Option<IcoFitMode>,
@@ -381,6 +385,12 @@ impl ConversionOptions {
                 return Err(
                     "bmp_bit_depth は 8 / 16 / 24 / 32 のいずれかを指定してください".into(),
                 );
+            }
+        }
+
+        if let Some(loop_count) = self.loop_count {
+            if !(1..=20).contains(&loop_count) {
+                return Err("loop_count は 1〜20 の範囲で指定してください".into());
             }
         }
 
