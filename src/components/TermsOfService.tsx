@@ -530,7 +530,7 @@ function useLicenseViewer() {
   };
 }
 
-function TermsSection({
+export function TermsSection({
   title,
   children,
 }: {

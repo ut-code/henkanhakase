@@ -26,6 +26,7 @@ import { ImageOptions } from "./components/ImageOptions";
 import { MediaModal } from "./components/MediaModal";
 import { MediaPreview } from "./components/MediaPreview";
 import { PdfOptions } from "./components/PdfOptions";
+import { PrivacyPolicy } from "./components/PrivacyPolicy";
 import { ResizeOptions } from "./components/ResizeOptions";
 import { TermsOfService } from "./components/TermsOfService";
 import { VideoOptions } from "./components/VideoOptions";
@@ -78,28 +79,35 @@ interface ConvertedResultItem {
   error: string | null;
 }
 
+// URL のハッシュで利用規約・プライバシーポリシーのページを直接開けるようにする。
+function documentPageFromHash(hash: string) {
+  if (hash === "#terms") return "terms";
+  if (hash === "#privacy") return "privacy";
+  return null;
+}
+
 function App() {
   const { locale, setLocale, t } = useTranslation();
-  const [showTerms, setShowTerms] = useState(
-    () => window.location.hash === "#terms",
+  const [documentPage, setDocumentPage] = useState(() =>
+    documentPageFromHash(window.location.hash),
   );
 
   useEffect(() => {
     const handleHashChange = () =>
-      setShowTerms(window.location.hash === "#terms");
+      setDocumentPage(documentPageFromHash(window.location.hash));
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  const closeTerms = () => {
-    if (window.location.hash === "#terms") {
+  const closeDocumentPage = () => {
+    if (documentPageFromHash(window.location.hash)) {
       window.history.replaceState(
         null,
         "",
         `${window.location.pathname}${window.location.search}`,
       );
     }
-    setShowTerms(false);
+    setDocumentPage(null);
   };
 
   // 複数ファイルを配列で管理
@@ -1076,8 +1084,11 @@ function App() {
     (r) => r.convertedFilePath,
   ).length;
 
-  if (showTerms) {
-    return <TermsOfService onBack={closeTerms} />;
+  if (documentPage === "terms") {
+    return <TermsOfService onBack={closeDocumentPage} />;
+  }
+  if (documentPage === "privacy") {
+    return <PrivacyPolicy onBack={closeDocumentPage} />;
   }
 
   return (
