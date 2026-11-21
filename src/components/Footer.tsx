@@ -6,7 +6,7 @@ import { useTranslation } from "../i18n";
 import { readLicense } from "../license-links";
 import { LicenseViewer } from "./LicenseViewer";
 
-const FEEDBACK_FORM_URL =
+export const FEEDBACK_FORM_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLSc-ICMvdBiBDUwV97ED9GOpwGqRcL1If1W17Ca_j7VQuYt40g/viewform";
 
 // デスクトップ版では WebView 内で遷移しないよう、既定のブラウザで開く。
@@ -80,6 +80,9 @@ export default function Footer() {
           <div className="flex flex-col items-center gap-3 text-white md:items-start">
             <a href="#terms" className="text-white hover:underline">
               {t("terms")}
+            </a>
+            <a href="#privacy" className="text-white hover:underline">
+              {t("privacyPolicy")}
             </a>
             <button
               type="button"
