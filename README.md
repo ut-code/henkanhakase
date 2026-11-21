@@ -339,6 +339,24 @@ brew install pkg-config cmake nasm
   ffmpeg -i input.jpg output.png
   ```
 
+## リリース方法
+
+リリースはGitHub Actionsのワークフローで自動化しています。リリース用のタグを作成すると、ビルドとGitHubリリースの作成が行われます。
+
+1. ローカルで以下の 3 ファイルのバージョン表記を統一し、コミット・Push する。
+- `package.json`
+- `src-tauri/tauri.conf.json`
+- `src-tauri/Cargo.toml`
+
+2. リリース用のタグをプッシュする。タグ名は `v<version>` 形式にする。
+
+例
+```bash
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+3. Actions 終了後、GitHub の Releases ページに作成された Draft を確認し、「Publish release」 で正式公開。
+
 ## ライセンス
 
 本体のソースコードは [MIT License](LICENSE) で公開しています。
