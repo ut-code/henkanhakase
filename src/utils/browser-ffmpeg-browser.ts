@@ -1,8 +1,6 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
 import { heicTo } from "heic-to";
-import coreURL from "../../node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js?url";
-import wasmURL from "../../node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm?url";
 import {
   type Format,
   formatToExtension,
@@ -20,6 +18,9 @@ let ffmpeg: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
 let conversionSequence = 0;
 
+const FFMPEG_CORE_BASE_URL =
+  "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
+
 export async function loadBrowserFfmpeg(): Promise<FFmpeg> {
   if (ffmpeg?.loaded) return ffmpeg;
   if (loading) return loading;
@@ -27,8 +28,14 @@ export async function loadBrowserFfmpeg(): Promise<FFmpeg> {
   loading = (async () => {
     const instance = new FFmpeg();
     await instance.load({
-      coreURL: await toBlobURL(coreURL, "text/javascript"),
-      wasmURL: await toBlobURL(wasmURL, "application/wasm"),
+      coreURL: await toBlobURL(
+        `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`,
+        "text/javascript",
+      ),
+      wasmURL: await toBlobURL(
+        `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`,
+        "application/wasm",
+      ),
     });
     ffmpeg = instance;
     return instance;
